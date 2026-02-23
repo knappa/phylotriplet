@@ -18,7 +18,7 @@ Imports:
     Rcpp (>= 1.0.0),
     ape (>= 5.0)
 LinkingTo: Rcpp
-SystemRequirements: C++14
+SystemRequirements: Eigen3 C++ header library
 RoxygenNote: 7.3.3
 Suggests:
     testthat (>= 3.0.0),

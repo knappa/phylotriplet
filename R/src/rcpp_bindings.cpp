@@ -1,4 +1,5 @@
 #include <Rcpp.h>
+#define PHYLOTRIPLET_RCPP_WARNINGS
 #include <phylotriplet/triplet_estimator.hpp>
 #include <phylotriplet/file_io.hpp>
 
