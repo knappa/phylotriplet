@@ -1,0 +1,29 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: phylotriplet
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Adam
+    family-names: Knapp
+    email: adam.knapp@medicine.ufl.edu
+    affiliation: University of Florida
+    orcid: 'https://orcid.org/0000-0002-5719-6003'
+  - given-names: Julia
+    family-names: Chifman
+    orcid: 'https://orcid.org/0000-0002-7520-0627'
+    affiliation: American University
+    email: chifman@american.edu
+repository-code: 'https://github.com/knappa/phylotriplet'
+abstract: >-
+  phylotriplet is a C++ library for inferring phylogenetic trees from weighted triplet
+  constraints. It implements the Aho et al. algorithm for inferring trees from
+  triplets, and extends it to handle weighted triplets and to infer trees with
+  polytomies when the input is not fully resolved.
+keywords:
+  - phylogenetics
+license: MIT

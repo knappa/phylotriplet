@@ -1,0 +1,14 @@
+# Example weighted trees file
+# Format: newick_tree weight
+# Each line contains a tree in Newick format followed by a space and its weight
+
+((human,chimp),gorilla); 0.95
+((human,chimp),orangutan); 0.88
+((human,gorilla),orangutan); 0.82
+((chimp,gorilla),orangutan); 0.79
+((mouse,rat),hamster); 0.92
+((mouse,rat),guinea_pig); 0.87
+((mouse,hamster),guinea_pig); 0.75
+((cat,dog),bear); 0.91
+((cat,dog),seal); 0.85
+((cat,bear),seal); 0.78

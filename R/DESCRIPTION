@@ -1,0 +1,30 @@
+Package: phylotriplet
+Type: Package
+Title: Phylogenetic Tree Estimation from Weighted Input Trees
+Version: 0.1.0
+Authors@R: c(
+    person("Adam", "Knapp", email = "adam.knapp@medicine.ufl.edu", role = c("aut", "cre")),
+    person("Julia", "Chifman", email = "chifman@american.edu", role = "aut")
+    )
+Description: Estimates phylogenetic trees from weighted input trees. Supports
+    input trees in Newick format with associated weights. Returns trees in APE
+    phylo format for seamless integration with the R phylogenetics ecosystem.
+    Particularly useful for estimating consensus trees from weighted triplets
+    or other weighted tree sets.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Imports: 
+    Rcpp (>= 1.0.0),
+    ape (>= 5.0)
+LinkingTo: Rcpp
+SystemRequirements: C++14
+RoxygenNote: 7.3.3
+Suggests:
+    testthat (>= 3.0.0),
+    phytools,
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+URL: https://github.com/knappa/phylotriplet
+BugReports: https://github.com/knappa/phylotriplet/issues
