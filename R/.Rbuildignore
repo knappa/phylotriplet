@@ -1,0 +1,5 @@
+^src/Makevars$
+^README\.md$
+^diagnose\.R$
+^install\.log$
+^LICENSE\.md$

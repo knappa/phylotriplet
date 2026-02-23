@@ -1,0 +1,48 @@
+#!/bin/sh
+# Configure script for the phylotriplet R package.
+# Detects the phylotriplet C++ headers and Eigen3, then writes src/Makevars.
+
+# --- phylotriplet headers ------------------------------------------------
+# In a packaged/CI build the workflow copies headers into inst/include/.
+# In a monorepo dev build they live two levels up from src/.
+if [ -d "inst/include/phylotriplet" ]; then
+    PHYLOTRIPLET_INC="-I../inst/include"
+else
+    PHYLOTRIPLET_INC="-I../../include"
+fi
+
+# --- Eigen3 headers ------------------------------------------------------
+# Priority: EIGEN3_INCLUDE_DIR env var > pkg-config > common installation paths
+if [ -n "${EIGEN3_INCLUDE_DIR}" ]; then
+    EIGEN3_INC="-I${EIGEN3_INCLUDE_DIR}"
+elif pkg-config --exists eigen3 2>/dev/null; then
+    EIGEN3_INC=$(pkg-config --cflags eigen3)
+else
+    EIGEN3_INC=""
+    for d in \
+        /usr/include/eigen3 \
+        /usr/local/include/eigen3 \
+        /opt/homebrew/opt/eigen/include/eigen3 \
+        /opt/homebrew/include/eigen3 \
+        /opt/local/include/eigen3; do
+        if [ -f "${d}/Eigen/Dense" ]; then
+            EIGEN3_INC="-I${d}"
+            break
+        fi
+    done
+fi
+
+if [ -z "${EIGEN3_INC}" ]; then
+    echo "ERROR: Eigen3 headers not found." >&2
+    echo "  Install libeigen3-dev (Debian/Ubuntu) or brew install eigen (macOS)," >&2
+    echo "  or set EIGEN3_INCLUDE_DIR to the directory containing Eigen/Dense." >&2
+    exit 1
+fi
+
+echo "* phylotriplet headers: ${PHYLOTRIPLET_INC}"
+echo "* Eigen3 headers:       ${EIGEN3_INC}"
+
+sed \
+    -e "s|@PHYLOTRIPLET_INC@|${PHYLOTRIPLET_INC}|g" \
+    -e "s|@EIGEN3_INC@|${EIGEN3_INC}|g" \
+    src/Makevars.in > src/Makevars

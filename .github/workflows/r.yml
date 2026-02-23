@@ -40,12 +40,16 @@ jobs:
 
       - name: Install dependencies
         run: |
-          install.packages(c("remotes", "rcmdcheck", "Rcpp"))
+          install.packages(c("remotes", "rcmdcheck", "Rcpp", "roxygen2"))
           remotes::install_deps("R", dependencies = TRUE)
         shell: Rscript {0}
 
       - name: Generate Rcpp exports
         run: Rcpp::compileAttributes("R")
+        shell: Rscript {0}
+
+      - name: Generate documentation
+        run: roxygen2::roxygenise("R")
         shell: Rscript {0}
 
       - name: Check
