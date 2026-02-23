@@ -1,0 +1,13 @@
+# Locate Eigen3 headers.
+# Priority: EIGEN3_INCLUDE_DIR env var > pkg-config > common paths
+ifdef EIGEN3_INCLUDE_DIR
+  EIGEN3_INC = -I$(EIGEN3_INCLUDE_DIR)
+else
+  EIGEN3_INC = $(shell pkg-config --cflags eigen3 2>/dev/null || \
+    for d in /usr/include/eigen3 /usr/local/include/eigen3 \
+              /opt/homebrew/include/eigen3 /opt/local/include/eigen3; do \
+      test -f $$d/Eigen/Dense && echo "-I$$d" && break; \
+    done)
+endif
+
+PKG_CXXFLAGS = $(EIGEN3_INC)

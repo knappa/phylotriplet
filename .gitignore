@@ -1,0 +1,17 @@
+# CMake build directories and CTest artifacts
+build/
+Testing/
+
+# Python build artifacts
+python/build/
+python/*.egg-info/
+python/*.so
+python/__pycache__/
+**/__pycache__/
+**/*.pyc
+
+# R build artifacts
+R/src/*.o
+R/src/*.so
+R/src/*.a
+R/install.log
