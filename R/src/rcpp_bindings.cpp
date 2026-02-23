@@ -1,6 +1,6 @@
 #include <Rcpp.h>
-#include "../../include/phylotriplet/triplet_estimator.hpp"
-#include "../../include/phylotriplet/file_io.hpp"
+#include <phylotriplet/triplet_estimator.hpp>
+#include <phylotriplet/file_io.hpp>
 
 using namespace Rcpp;
 using namespace phylotriplet;
