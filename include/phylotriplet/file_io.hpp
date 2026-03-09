@@ -51,6 +51,7 @@ inline std::vector<WeightedTree> parse_weighted_trees_from_stream(
   std::vector<WeightedTree> trees;
   std::string line;
   int line_num = 0;
+  bool weight_warning_already_displayed = false;
 
   while (std::getline(stream, line)) {
     line_num++;
@@ -98,8 +99,10 @@ inline std::vector<WeightedTree> parse_weighted_trees_from_stream(
                                 ": '" + weight_str + "'");
         }
     } else {
+      if (!weight_warning_already_displayed) {
         PHYLOTRIPLET_WARN("Warning: no weight found at line " +
             std::to_string(line_num) + " of " + source + ", defaulting to 1.0.");
+      }
     }
 
     std::string newick = line.substr(0, space_separator);
