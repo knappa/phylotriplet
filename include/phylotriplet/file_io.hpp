@@ -8,15 +8,7 @@
 #include <vector>
 
 #include "tree.hpp"
-
-// Warning macro: defaults to std::cerr.
-// Define PHYLOTRIPLET_RCPP_WARNINGS before including this header (and include
-// Rcpp.h first) to route warnings through Rcpp::warning() instead.
-#if defined(PHYLOTRIPLET_RCPP_WARNINGS)
-#define PHYLOTRIPLET_WARN(msg) Rcpp::warning(msg)
-#else
-#define PHYLOTRIPLET_WARN(msg) do { std::cerr << (msg) << '\n'; } while (0)
-#endif
+#include "warn.hpp"
 
 namespace phylotriplet {
 
@@ -75,7 +67,8 @@ inline std::vector<WeightedTree> parse_weighted_trees_from_stream(
     line = std::move(clean_line);
 
     // Strip any trailing space
-    if (!line.empty() && std::isspace(static_cast<unsigned char>(line.back()))) {
+    if (!line.empty() &&
+        std::isspace(static_cast<unsigned char>(line.back()))) {
       line.pop_back();
     }
 
@@ -88,20 +81,21 @@ inline std::vector<WeightedTree> parse_weighted_trees_from_stream(
     // Split on last space for weight.
     size_t space_separator = line.find_last_of(' ');
     if (space_separator != std::string::npos) {
-        std::string weight_str = line.substr(space_separator);
+      std::string weight_str = line.substr(space_separator);
 
-        // Parse weight.
-        try {
+      // Parse weight.
+      try {
         weight = std::stod(weight_str);
-        } catch (...) {
+      } catch (...) {
         throw std::runtime_error("Invalid weight at line " +
-                                std::to_string(line_num) + " of " + source +
-                                ": '" + weight_str + "'");
-        }
+                                 std::to_string(line_num) + " of " + source +
+                                 ": '" + weight_str + "'");
+      }
     } else {
       if (!weight_warning_already_displayed) {
         PHYLOTRIPLET_WARN("Warning: no weight found at line " +
-            std::to_string(line_num) + " of " + source + ", defaulting to 1.0.");
+                          std::to_string(line_num) + " of " + source +
+                          ", defaulting to 1.0.");
       }
     }
 
@@ -118,15 +112,14 @@ inline std::vector<WeightedTree> parse_weighted_trees_from_stream(
     if (newick.back() != ';') {
       newick += ';';
       PHYLOTRIPLET_WARN("Warning: Newick string missing semicolon at line " +
-          std::to_string(line_num) + " of " + source + ".");
+                        std::to_string(line_num) + " of " + source + ".");
     }
-    
+
     try {
       trees.emplace_back(newick, weight);
     } catch (const std::exception& e) {
-      throw std::runtime_error(
-          "Error on line " + std::to_string(line_num) + " of " + source
-          + ": " + e.what());
+      throw std::runtime_error("Error on line " + std::to_string(line_num) +
+                               " of " + source + ": " + e.what());
     }
   }
 

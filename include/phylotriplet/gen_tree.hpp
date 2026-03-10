@@ -17,17 +17,19 @@ namespace phylotriplet {
  * triplet encodes a,b|c (a and b share a more recent common ancestor than c).
  */
 struct WeightedTriplet {
-	std::array<std::string, 3> triplet;
-	double weight;
+  std::array<std::string, 3> triplet;
+  double weight;
 
-	WeightedTriplet(const std::array<std::string, 3>& trip) : triplet(trip), weight(1.0) {}
-	WeightedTriplet(const std::array<std::string, 3>& trip, double w) : triplet(trip), weight(w) {}
+  WeightedTriplet(const std::array<std::string, 3>& trip)
+      : triplet(trip), weight(1.0) {}
+  WeightedTriplet(const std::array<std::string, 3>& trip, double w)
+      : triplet(trip), weight(w) {}
 };
 
 namespace detail {
 
-inline void gen_tree_recursive(
-    const std::vector<WeightedTriplet>& triplets, TreeNode* node) {
+inline void gen_tree_recursive(const std::vector<WeightedTriplet>& triplets,
+                               TreeNode* node) {
   // Base case: single triplet (a,b,c) encodes a,b|c.
   if (triplets.size() == 1) {
     const auto& t = triplets[0].triplet;
@@ -71,17 +73,18 @@ inline void gen_tree_recursive(
   }
 
   for (const auto& comp : parts) {
-	if (comp.empty()) {
-		throw std::runtime_error(
-        "gen_tree: spectral partition produced an empty component; this should not happen");
-	} else if (comp.size() == 1) {
+    if (comp.empty()) {
+      throw std::runtime_error(
+          "gen_tree: spectral partition produced an empty component; this "
+          "should not happen");
+    } else if (comp.size() == 1) {
       // Single-taxon component: attach as a leaf.
       node->add_child(comp[0]);
     } else {
-      // Multi-taxon component, we might have to recurse or emit a multifurcation depending on
-	  // the triplets over these taxa.
-	  
-	  // filter triplets to those over this component's taxa
+      // Multi-taxon component, we might have to recurse or emit a
+      // multifurcation depending on the triplets over these taxa.
+
+      // filter triplets to those over this component's taxa
       std::set<std::string> comp_set(comp.begin(), comp.end());
       std::vector<WeightedTriplet> comp_triplets;
       for (const auto& wt : triplets) {
@@ -89,7 +92,6 @@ inline void gen_tree_recursive(
             comp_set.count(wt.triplet[2]))
           comp_triplets.push_back(wt);
       }
-
 
       TreeNode* subnode = node->add_child();
       if (comp_triplets.empty()) {

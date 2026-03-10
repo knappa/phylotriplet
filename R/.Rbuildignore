@@ -1,5 +1,8 @@
 ^src/Makevars$
+^src/.*\.o$
+^src/.*\.so$
 ^README\.md$
 ^diagnose\.R$
 ^install\.log$
 ^LICENSE\.md$
+^\.\.[A-Za-z]

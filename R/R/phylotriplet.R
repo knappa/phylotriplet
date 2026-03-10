@@ -181,3 +181,493 @@ read_weighted_trees <- function(filepath) {
   }
   read_weighted_trees_rcpp(filepath)
 }
+
+# -- Sequence alignment ---------------------------------------------------------
+
+#' Read a NEXUS alignment file
+#'
+#' Parses a NEXUS file and returns a PhylotripletAlignment object. Supports
+#' multiple DATA/CHARACTERS blocks (one per gene), a single DATA block split
+#' by a SETS block with CHARSET commands, sequential and interleaved MATRIX
+#' formats, and DNA/RNA datatypes.
+#'
+#' @param filepath Path to the NEXUS file
+#'
+#' @return A PhylotripletAlignment object
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' aln <- read_nexus("mydata.nex")
+#' print(aln)
+#' pats <- triplet_site_patterns(aln)
+#' head(pats[, c("taxon1", "taxon2", "taxon3", "n_total", "n_counted")])
+#' }
+read_nexus <- function(filepath) {
+  if (!file.exists(filepath)) {
+    stop("File not found: ", filepath)
+  }
+  ptr <- read_nexus_rcpp(filepath)
+  structure(list(.ptr = ptr), class = "PhylotripletAlignment")
+}
+
+#' Read one or more PHYLIP alignment files
+#'
+#' Reads one or more PHYLIP-format files as a multi-gene alignment and returns
+#' a PhylotripletAlignment object.
+#'
+#' @param filepaths Character vector of file paths, one per gene
+#' @param gene_names Optional character vector of gene names; defaults to
+#'   filename stems
+#' @param interleaved Logical; set TRUE for interleaved PHYLIP format
+#'   (applied uniformly to all files)
+#'
+#' @return A PhylotripletAlignment object
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' aln <- read_phylip_files(c("gene1.phy", "gene2.phy"))
+#' pats <- triplet_site_patterns(aln)
+#' }
+read_phylip_files <- function(filepaths, gene_names = character(0),
+                               interleaved = FALSE) {
+  missing <- filepaths[!file.exists(filepaths)]
+  if (length(missing) > 0) {
+    stop("File(s) not found: ", paste(missing, collapse = ", "))
+  }
+  ptr <- read_phylip_files_rcpp(filepaths, gene_names, interleaved)
+  structure(list(.ptr = ptr), class = "PhylotripletAlignment")
+}
+
+#' Print a PhylotripletAlignment
+#'
+#' @param x A PhylotripletAlignment object
+#' @param ... Ignored
+#'
+#' @export
+print.PhylotripletAlignment <- function(x, ...) {
+  ng <- alignment_num_genes_rcpp(x$.ptr)
+  taxa <- alignment_taxon_names_rcpp(x$.ptr)
+  cat("PhylotripletAlignment\n")
+  cat(" ", ng, "gene(s),", length(taxa), "taxon/taxa\n")
+  if (length(taxa) > 0) {
+    preview <- if (length(taxa) <= 8) taxa else c(taxa[1:8], "...")
+    cat("  Taxa:", paste(preview, collapse = ", "), "\n")
+  }
+  invisible(x)
+}
+
+# -- Gene access ---------------------------------------------------------------
+
+#' Get gene names from an alignment
+#'
+#' @param alignment A PhylotripletAlignment object.
+#' @param ... Ignored.
+#'
+#' @return Character vector of gene names in order.
+#'
+#' @export
+gene_names <- function(alignment, ...) UseMethod("gene_names")
+
+#' @export
+gene_names.PhylotripletAlignment <- function(alignment, ...) {
+  alignment_gene_names_rcpp(alignment$.ptr)
+}
+
+#' Extract a single gene from an alignment
+#'
+#' Returns a PhylotripletGene object that can be passed to
+#' \code{\link{triplet_site_patterns}}, \code{\link{triplet_site_pattern}},
+#' \code{\link{quartet_site_patterns}}, \code{\link{quartet_site_pattern}},
+#' and \code{\link{site_pattern}}.
+#'
+#' @param alignment A PhylotripletAlignment object.
+#' @param idx Either a 1-based integer index or a character gene name.
+#' @param ... Ignored.
+#'
+#' @return A PhylotripletGene object.
+#'
+#' @export
+get_gene <- function(alignment, idx, ...) UseMethod("get_gene")
+
+#' @export
+get_gene.PhylotripletAlignment <- function(alignment, idx, ...) {
+  ptr <- get_gene_rcpp(alignment$.ptr, idx)
+  structure(list(.ptr = ptr), class = "PhylotripletGene")
+}
+
+#' Print a PhylotripletGene
+#'
+#' @param x A PhylotripletGene object
+#' @param ... Ignored
+#'
+#' @export
+print.PhylotripletGene <- function(x, ...) {
+  nm <- gene_name_rcpp(x$.ptr)
+  taxa <- gene_taxon_names_rcpp(x$.ptr)
+  cat("PhylotripletGene\n")
+  cat("  Gene:", nm, "\n")
+  cat(" ", length(taxa), "taxon/taxa\n")
+  if (length(taxa) > 0) {
+    preview <- if (length(taxa) <= 8) taxa else c(taxa[1:8], "...")
+    cat("  Taxa:", paste(preview, collapse = ", "), "\n")
+  }
+  invisible(x)
+}
+
+#' Compute triplet site-pattern counts from an alignment
+#'
+#' Computes aggregate site-pattern counts across all genes for every C(n,3)
+#' taxon triplet.  Contributions from a gene are included only for genes that
+#' contain all three taxa; n_total and n_counted are summed accordingly.
+#'
+#' @param alignment A PhylotripletAlignment object returned by
+#'   \code{\link{read_nexus}} or \code{\link{read_phylip_files}}
+#' @param ... Ignored
+#'
+#' @return A data frame with one row per taxon triplet and columns:
+#'   \describe{
+#'     \item{taxon1, taxon2, taxon3}{Taxon names (lexicographic order)}
+#'     \item{n_total}{Total alignment columns across contributing genes}
+#'     \item{n_counted}{Columns with no gap in any of the three taxa}
+#'     \item{site_pattern}{List column; each element is a numeric vector of length 64.
+#'       \code{site_pattern[[i]][a*16 + b*4 + c + 1]} (1-indexed) is the
+#'       fractional count of sites where taxon1 shows base a, taxon2 shows b,
+#'       taxon3 shows c, with 0=A, 1=C, 2=G, 3=T.}
+#'   }
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' aln  <- read_nexus("mydata.nex")
+#' pats <- triplet_site_patterns(aln)
+#'
+#' # Access the 64-vector for the first triplet
+#' pats$site_pattern[[1]]
+#'
+#' # Fraction of sites with no gap (per triplet)
+#' pats$n_counted / pats$n_total
+#' }
+triplet_site_patterns <- function(alignment, ...) {
+  UseMethod("triplet_site_patterns")
+}
+
+#' @export
+triplet_site_patterns.PhylotripletAlignment <- function(alignment, ...) {
+  raw <- triplet_site_patterns_rcpp(alignment$.ptr)
+  df <- data.frame(
+    taxon1    = raw$taxon1,
+    taxon2    = raw$taxon2,
+    taxon3    = raw$taxon3,
+    n_total   = raw$n_total,
+    n_counted = raw$n_counted,
+    stringsAsFactors = FALSE
+  )
+  df$site_pattern <- lapply(seq_len(nrow(df)), function(i) raw$site_pattern[i, ])
+  df
+}
+
+#' @export
+triplet_site_patterns.PhylotripletGene <- function(alignment, ...) {
+  raw <- gene_triplet_site_patterns_rcpp(alignment$.ptr)
+  df <- data.frame(
+    taxon1    = raw$taxon1,
+    taxon2    = raw$taxon2,
+    taxon3    = raw$taxon3,
+    n_total   = raw$n_total,
+    n_counted = raw$n_counted,
+    stringsAsFactors = FALSE
+  )
+  df$site_pattern <- lapply(seq_len(nrow(df)), function(i) raw$site_pattern[i, ])
+  df
+}
+
+#' Compute site-pattern counts for a specific taxon triplet
+#'
+#' Like \code{\link{triplet_site_patterns}} but restricted to a single
+#' user-specified triplet of taxa.  Genes that do not contain all three taxa
+#' are skipped with a warning (multi-gene alignment) or an error is raised
+#' (single gene).  The taxon names may be given in any order.
+#'
+#' @param alignment A PhylotripletAlignment or PhylotripletGene object.
+#' @param taxon1,taxon2,taxon3 Character scalars naming the three taxa.
+#' @param ... Ignored.
+#'
+#' @return A one-row data frame with the same columns as
+#'   \code{\link{triplet_site_patterns}}: \code{taxon1}, \code{taxon2},
+#'   \code{taxon3}, \code{n_total}, \code{n_counted}, and \code{site_pattern}
+#'   (a list column containing one numeric vector of length 64).
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' aln  <- read_nexus("mydata.nex")
+#' pats <- triplet_site_pattern(aln, "human", "chimp", "gorilla")
+#' pats$site_pattern[[1]]
+#' }
+triplet_site_pattern <- function(alignment, taxon1, taxon2, taxon3, ...) {
+  UseMethod("triplet_site_pattern")
+}
+
+#' @export
+triplet_site_pattern.PhylotripletAlignment <- function(alignment, taxon1,
+                                                       taxon2, taxon3, ...) {
+  raw <- triplet_site_pattern_rcpp(alignment$.ptr, taxon1, taxon2, taxon3)
+  df <- data.frame(
+    taxon1    = raw$taxon1,
+    taxon2    = raw$taxon2,
+    taxon3    = raw$taxon3,
+    n_total   = raw$n_total,
+    n_counted = raw$n_counted,
+    stringsAsFactors = FALSE
+  )
+  df$site_pattern <- list(raw$site_pattern)
+  df
+}
+
+#' @export
+triplet_site_pattern.PhylotripletGene <- function(alignment, taxon1,
+                                                  taxon2, taxon3, ...) {
+  raw <- gene_triplet_site_pattern_rcpp(alignment$.ptr, taxon1, taxon2, taxon3)
+  df <- data.frame(
+    taxon1    = raw$taxon1,
+    taxon2    = raw$taxon2,
+    taxon3    = raw$taxon3,
+    n_total   = raw$n_total,
+    n_counted = raw$n_counted,
+    stringsAsFactors = FALSE
+  )
+  df$site_pattern <- list(raw$site_pattern)
+  df
+}
+
+#' Compute quartet site-pattern counts from an alignment
+#'
+#' Computes aggregate site-pattern counts across all genes for every C(n,4)
+#' taxon quartet.  Contributions from a gene are included only for genes that
+#' contain all four taxa; n_total and n_counted are summed accordingly.
+#'
+#' @param alignment A PhylotripletAlignment object returned by
+#'   \code{\link{read_nexus}} or \code{\link{read_phylip_files}}
+#' @param ... Ignored
+#'
+#' @return A data frame with one row per taxon quartet and columns:
+#'   \describe{
+#'     \item{taxon1, taxon2, taxon3, taxon4}{Taxon names (lexicographic order)}
+#'     \item{n_total}{Total alignment columns across contributing genes}
+#'     \item{n_counted}{Columns with no gap in any of the four taxa}
+#'     \item{site_pattern}{List column; each element is a numeric vector of length 256.
+#'       \code{site_pattern[[i]][a*64 + b*16 + c*4 + d + 1]} (1-indexed) is the
+#'       fractional count of sites where taxon1=a, taxon2=b, taxon3=c, taxon4=d,
+#'       with 0=A, 1=C, 2=G, 3=T.}
+#'   }
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' aln  <- read_nexus("mydata.nex")
+#' pats <- quartet_site_patterns(aln)
+#' pats$site_pattern[[1]]
+#' }
+quartet_site_patterns <- function(alignment, ...) {
+  UseMethod("quartet_site_patterns")
+}
+
+#' @export
+quartet_site_patterns.PhylotripletAlignment <- function(alignment, ...) {
+  raw <- quartet_site_patterns_rcpp(alignment$.ptr)
+  df <- data.frame(
+    taxon1    = raw$taxon1,
+    taxon2    = raw$taxon2,
+    taxon3    = raw$taxon3,
+    taxon4    = raw$taxon4,
+    n_total   = raw$n_total,
+    n_counted = raw$n_counted,
+    stringsAsFactors = FALSE
+  )
+  df$site_pattern <- lapply(seq_len(nrow(df)), function(i) raw$site_pattern[i, ])
+  df
+}
+
+#' @export
+quartet_site_patterns.PhylotripletGene <- function(alignment, ...) {
+  raw <- gene_quartet_site_patterns_rcpp(alignment$.ptr)
+  df <- data.frame(
+    taxon1    = raw$taxon1,
+    taxon2    = raw$taxon2,
+    taxon3    = raw$taxon3,
+    taxon4    = raw$taxon4,
+    n_total   = raw$n_total,
+    n_counted = raw$n_counted,
+    stringsAsFactors = FALSE
+  )
+  df$site_pattern <- lapply(seq_len(nrow(df)), function(i) raw$site_pattern[i, ])
+  df
+}
+
+#' Compute site-pattern counts for a specific taxon quartet
+#'
+#' Like \code{\link{quartet_site_patterns}} but restricted to a single
+#' user-specified quartet of taxa.  Genes that do not contain all four taxa
+#' are skipped with a warning.  The taxon names may be given in any order.
+#'
+#' @param alignment A PhylotripletAlignment object.
+#' @param taxon1,taxon2,taxon3,taxon4 Character scalars naming the four taxa.
+#' @param ... Ignored.
+#'
+#' @return A one-row data frame with the same columns as
+#'   \code{\link{quartet_site_patterns}}: \code{taxon1}, \code{taxon2},
+#'   \code{taxon3}, \code{taxon4}, \code{n_total}, \code{n_counted}, and
+#'   \code{site_pattern} (a list column containing one numeric vector of length 256).
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' aln  <- read_nexus("mydata.nex")
+#' pats <- quartet_site_pattern(aln, "human", "chimp", "gorilla", "orangutan")
+#' pats$site_pattern[[1]]
+#' }
+quartet_site_pattern <- function(alignment, taxon1, taxon2, taxon3, taxon4,
+                                 ...) {
+  UseMethod("quartet_site_pattern")
+}
+
+#' @export
+quartet_site_pattern.PhylotripletAlignment <- function(alignment, taxon1,
+                                                       taxon2, taxon3, taxon4,
+                                                       ...) {
+  raw <- quartet_site_pattern_rcpp(alignment$.ptr, taxon1, taxon2, taxon3,
+                                   taxon4)
+  df <- data.frame(
+    taxon1    = raw$taxon1,
+    taxon2    = raw$taxon2,
+    taxon3    = raw$taxon3,
+    taxon4    = raw$taxon4,
+    n_total   = raw$n_total,
+    n_counted = raw$n_counted,
+    stringsAsFactors = FALSE
+  )
+  df$site_pattern <- list(raw$site_pattern)
+  df
+}
+
+#' @export
+quartet_site_pattern.PhylotripletGene <- function(alignment, taxon1, taxon2,
+                                                  taxon3, taxon4, ...) {
+  raw <- gene_quartet_site_pattern_rcpp(alignment$.ptr, taxon1, taxon2,
+                                        taxon3, taxon4)
+  df <- data.frame(
+    taxon1    = raw$taxon1,
+    taxon2    = raw$taxon2,
+    taxon3    = raw$taxon3,
+    taxon4    = raw$taxon4,
+    n_total   = raw$n_total,
+    n_counted = raw$n_counted,
+    stringsAsFactors = FALSE
+  )
+  df$site_pattern <- list(raw$site_pattern)
+  df
+}
+
+#' Reshape a site-pattern vector into a 4^k array
+#'
+#' Converts a site-pattern vector of length 4^k (as stored in the
+#' \code{site_pattern} column of \code{\link{triplet_site_patterns}} or the
+#' \code{site_pattern} element of \code{\link{site_pattern}}) into a named
+#' array of shape (4, 4, ..., 4) (k dimensions).  Element
+#' \code{arr[b1, b2, ..., bk]} holds the fractional count of sites where
+#' the first taxon shows base b1, the second b2, etc., with bases labelled
+#' by the dimnames (A, C, G, T).
+#'
+#' @param vec Numeric vector of length 4^k.
+#' @return A numeric array with k dimensions of size 4, with dimnames
+#'   \code{c("A","C","G","T")} on each axis.
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' pats <- triplet_site_patterns(read_nexus("mydata.nex"))
+#' arr  <- site_pattern_as_array(pats$site_pattern[[1]])
+#' arr["A", "A", "A"]   # count for taxa showing A, A, A
+#' }
+site_pattern_as_array <- function(vec) {
+  k <- log(length(vec), base = 4)
+  if (abs(k - round(k)) > 1e-9 || k < 1)
+    stop("vec length must be a power of 4 (got ", length(vec), ")")
+  k <- as.integer(round(k))
+  bases <- c("A", "C", "G", "T")
+  # R fills arrays column-major, so array(vec, rep(4,k)) gives
+  #   arr[a_k, ..., a_1] = vec[flat C-order index of (a_1,...,a_k)].
+  # aperm with reversed permutation corrects axis order so that
+  #   arr[a_1, a_2, ..., a_k] = vec[flat C-order index of (a_1,...,a_k)],
+  # matching the C++ index b_0*4^(k-1) + b_1*4^(k-2) + ... + b_{k-1}.
+  arr <- aperm(array(vec, dim = rep(4L, k)), rev(seq_len(k)))
+  dimnames(arr) <- rep(list(bases), k)
+  arr
+}
+
+#' Compute site-pattern counts for a k-tuple of taxa
+#'
+#' Accepts a vector of k taxon names (k >= 2), enabling pair, triplet,
+#' quartet, or higher-order patterns.  Genes that do not contain all k taxa
+#' are skipped with a warning.  Names may be given in any order.
+#'
+#' @param alignment A PhylotripletAlignment object.
+#' @param taxa Character vector of k taxon names (any order, length >= 2).
+#' @param ... Ignored.
+#'
+#' @return A named list with elements:
+#'   \describe{
+#'     \item{taxa}{Character vector of k taxon names in lexicographic order.}
+#'     \item{n_total}{Total alignment columns across contributing genes.}
+#'     \item{n_counted}{Columns with no gap in any of the k taxa.}
+#'     \item{site_pattern}{Numeric vector of length 4^k with site-pattern
+#'       counts.  Use \code{\link{site_pattern_as_array}} to reshape.}
+#'   }
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' aln  <- read_nexus("mydata.nex")
+#' res  <- site_pattern(aln, c("human", "chimp", "gorilla"))
+#' arr  <- site_pattern_as_array(res$site_pattern)
+#' arr["A", "A", "A"]   # count for all three showing A
+#' }
+site_pattern <- function(alignment, taxa, ...) {
+  UseMethod("site_pattern")
+}
+
+#' @export
+site_pattern.PhylotripletAlignment <- function(alignment, taxa, ...) {
+  taxa <- as.character(taxa)
+  if (length(taxa) < 2L) stop("taxa must have length >= 2")
+  raw <- site_pattern_rcpp(alignment$.ptr, taxa)
+  list(
+    taxa         = raw$taxa,
+    n_total      = raw$n_total,
+    n_counted    = raw$n_counted,
+    site_pattern = raw$site_pattern
+  )
+}
+
+#' @export
+site_pattern.PhylotripletGene <- function(alignment, taxa, ...) {
+  taxa <- as.character(taxa)
+  if (length(taxa) < 2L) stop("taxa must have length >= 2")
+  raw <- gene_site_pattern_rcpp(alignment$.ptr, taxa)
+  list(
+    taxa         = raw$taxa,
+    n_total      = raw$n_total,
+    n_counted    = raw$n_counted,
+    site_pattern = raw$site_pattern
+  )
+}

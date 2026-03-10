@@ -6,6 +6,8 @@ Authors@R: c(
     person("Adam", "Knapp", email = "adam.knapp@medicine.ufl.edu", role = c("aut", "cre")),
     person("Julia", "Chifman", email = "chifman@american.edu", role = "aut")
     )
+Author: Adam Knapp [aut, cre], Julia Chifman [aut]
+Maintainer: Adam Knapp <adam.knapp@medicine.ufl.edu>
 Description: Estimates phylogenetic trees from weighted input trees. Supports
     input trees in Newick format with associated weights. Returns trees in APE
     phylo format for seamless integration with the R phylogenetics ecosystem.
@@ -13,8 +15,7 @@ Description: Estimates phylogenetic trees from weighted input trees. Supports
     or other weighted tree sets.
 License: MIT + file LICENSE
 Encoding: UTF-8
-LazyData: true
-Imports: 
+Imports:
     Rcpp (>= 1.0.0),
     ape (>= 5.0)
 LinkingTo: Rcpp
@@ -22,9 +23,6 @@ SystemRequirements: Eigen3 C++ header library
 RoxygenNote: 7.3.3
 Suggests:
     testthat (>= 3.0.0),
-    phytools,
-    knitr,
-    rmarkdown
-VignetteBuilder: knitr
+    phytools
 URL: https://github.com/knappa/phylotriplet
 BugReports: https://github.com/knappa/phylotriplet/issues

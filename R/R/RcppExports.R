@@ -37,3 +37,204 @@ read_weighted_trees_rcpp <- function(filepath) {
     .Call(`_phylotriplet_read_weighted_trees_rcpp`, filepath)
 }
 
+#' Read a NEXUS alignment file (internal)
+#'
+#' @param filepath Path to the NEXUS file
+#' @return External pointer to a MultiGeneAlignment object
+#' @keywords internal
+read_nexus_rcpp <- function(filepath) {
+    .Call(`_phylotriplet_read_nexus_rcpp`, filepath)
+}
+
+#' Read one or more PHYLIP alignment files (internal)
+#'
+#' @param filepaths Character vector of file paths, one per gene
+#' @param gene_names Optional character vector of gene names
+#' @param interleaved Logical; use interleaved PHYLIP format
+#' @return External pointer to a MultiGeneAlignment object
+#' @keywords internal
+read_phylip_files_rcpp <- function(filepaths, gene_names, interleaved) {
+    .Call(`_phylotriplet_read_phylip_files_rcpp`, filepaths, gene_names, interleaved)
+}
+
+#' Get number of genes in a MultiGeneAlignment (internal)
+#'
+#' @param aln_ptr External pointer from read_nexus_rcpp / read_phylip_files_rcpp
+#' @return Integer
+#' @keywords internal
+alignment_num_genes_rcpp <- function(aln_ptr) {
+    .Call(`_phylotriplet_alignment_num_genes_rcpp`, aln_ptr)
+}
+
+#' Get sorted taxon names from a MultiGeneAlignment (internal)
+#'
+#' @param aln_ptr External pointer from read_nexus_rcpp / read_phylip_files_rcpp
+#' @return Character vector of taxon names
+#' @keywords internal
+alignment_taxon_names_rcpp <- function(aln_ptr) {
+    .Call(`_phylotriplet_alignment_taxon_names_rcpp`, aln_ptr)
+}
+
+#' Get gene names from a MultiGeneAlignment (internal)
+#'
+#' @param aln_ptr External pointer from read_nexus_rcpp / read_phylip_files_rcpp
+#' @return Character vector of gene names in order
+#' @keywords internal
+alignment_gene_names_rcpp <- function(aln_ptr) {
+    .Call(`_phylotriplet_alignment_gene_names_rcpp`, aln_ptr)
+}
+
+#' Extract a single gene from a MultiGeneAlignment by index or name (internal)
+#'
+#' @param aln_ptr External pointer from read_nexus_rcpp / read_phylip_files_rcpp
+#' @param idx 1-based integer index, or a character gene name
+#' @return External pointer to a GeneAlignment (copy)
+#' @keywords internal
+get_gene_rcpp <- function(aln_ptr, idx) {
+    .Call(`_phylotriplet_get_gene_rcpp`, aln_ptr, idx)
+}
+
+#' Get gene name from a GeneAlignment pointer (internal)
+#'
+#' @param gene_ptr External pointer from get_gene_rcpp
+#' @return Character scalar
+#' @keywords internal
+gene_name_rcpp <- function(gene_ptr) {
+    .Call(`_phylotriplet_gene_name_rcpp`, gene_ptr)
+}
+
+#' Get taxon names from a GeneAlignment pointer (internal)
+#'
+#' @param gene_ptr External pointer from get_gene_rcpp
+#' @return Character vector of taxon names
+#' @keywords internal
+gene_taxon_names_rcpp <- function(gene_ptr) {
+    .Call(`_phylotriplet_gene_taxon_names_rcpp`, gene_ptr)
+}
+
+#' Compute all triplet site-pattern counts for one gene (internal)
+#'
+#' @param gene_ptr External pointer from get_gene_rcpp
+#' @return Named list with elements:
+#'   taxon1, taxon2, taxon3 (character vectors),
+#'   n_total, n_counted (numeric vectors),
+#'   site_pattern (numeric matrix, one row per triplet, 64 columns)
+#' @keywords internal
+gene_triplet_site_patterns_rcpp <- function(gene_ptr) {
+    .Call(`_phylotriplet_gene_triplet_site_patterns_rcpp`, gene_ptr)
+}
+
+#' Compute site-pattern counts for a specific triplet in one gene (internal)
+#'
+#' @param gene_ptr External pointer from get_gene_rcpp
+#' @param taxon1,taxon2,taxon3 Taxon names (any order)
+#' @return Named list (same format as gene_triplet_site_patterns_rcpp, one row)
+#' @keywords internal
+gene_triplet_site_pattern_rcpp <- function(gene_ptr, taxon1, taxon2, taxon3) {
+    .Call(`_phylotriplet_gene_triplet_site_pattern_rcpp`, gene_ptr, taxon1, taxon2, taxon3)
+}
+
+#' Compute all quartet site-pattern counts for one gene (internal)
+#'
+#' @param gene_ptr External pointer from get_gene_rcpp
+#' @return Named list with elements:
+#'   taxon1, taxon2, taxon3, taxon4 (character vectors),
+#'   n_total, n_counted (numeric vectors),
+#'   site_pattern (numeric matrix, one row per quartet, 256 columns)
+#' @keywords internal
+gene_quartet_site_patterns_rcpp <- function(gene_ptr) {
+    .Call(`_phylotriplet_gene_quartet_site_patterns_rcpp`, gene_ptr)
+}
+
+#' Compute site-pattern counts for a specific quartet in one gene (internal)
+#'
+#' @param gene_ptr External pointer from get_gene_rcpp
+#' @param taxon1,taxon2,taxon3,taxon4 Taxon names (any order)
+#' @return Named list (same format as gene_quartet_site_patterns_rcpp, one row)
+#' @keywords internal
+gene_quartet_site_pattern_rcpp <- function(gene_ptr, taxon1, taxon2, taxon3, taxon4) {
+    .Call(`_phylotriplet_gene_quartet_site_pattern_rcpp`, gene_ptr, taxon1, taxon2, taxon3, taxon4)
+}
+
+#' Compute site-pattern counts for a k-tuple in one gene (internal)
+#'
+#' @param gene_ptr External pointer from get_gene_rcpp
+#' @param taxa Character vector of taxon names (any order, length >= 2)
+#' @return Named list: taxa, n_total, n_counted, site_pattern (4^k vector)
+#' @keywords internal
+gene_site_pattern_rcpp <- function(gene_ptr, taxa) {
+    .Call(`_phylotriplet_gene_site_pattern_rcpp`, gene_ptr, taxa)
+}
+
+#' Compute aggregate triplet site-pattern counts (internal)
+#'
+#' @param aln_ptr External pointer from read_nexus_rcpp / read_phylip_files_rcpp
+#' @return Named list with elements:
+#'   taxon1, taxon2, taxon3 (character vectors),
+#'   n_total, n_counted (numeric vectors),
+#'   site_pattern (numeric matrix, one row per triplet, 64 columns)
+#' @keywords internal
+triplet_site_patterns_rcpp <- function(aln_ptr) {
+    .Call(`_phylotriplet_triplet_site_patterns_rcpp`, aln_ptr)
+}
+
+#' Compute site-pattern counts for one specific taxon triplet (internal)
+#'
+#' Taxa names may be given in any order.  Genes that do not contain all
+#' three taxa are skipped with a warning.
+#'
+#' @param aln_ptr External pointer from read_nexus_rcpp / read_phylip_files_rcpp
+#' @param taxon1,taxon2,taxon3 Taxon names (any order)
+#' @return Named list with elements:
+#'   taxon1, taxon2, taxon3 (length-1 character vectors),
+#'   n_total, n_counted (scalars),
+#'   site_pattern (numeric vector of length 64)
+#' @keywords internal
+triplet_site_pattern_rcpp <- function(aln_ptr, taxon1, taxon2, taxon3) {
+    .Call(`_phylotriplet_triplet_site_pattern_rcpp`, aln_ptr, taxon1, taxon2, taxon3)
+}
+
+#' Compute aggregate quartet site-pattern counts (internal)
+#'
+#' @param aln_ptr External pointer from read_nexus_rcpp / read_phylip_files_rcpp
+#' @return Named list with elements:
+#'   taxon1, taxon2, taxon3, taxon4 (character vectors),
+#'   n_total, n_counted (numeric vectors),
+#'   site_pattern (numeric matrix, one row per quartet, 256 columns)
+#' @keywords internal
+quartet_site_patterns_rcpp <- function(aln_ptr) {
+    .Call(`_phylotriplet_quartet_site_patterns_rcpp`, aln_ptr)
+}
+
+#' Compute site-pattern counts for one specific taxon quartet (internal)
+#'
+#' Taxa names may be given in any order.  Genes that do not contain all
+#' four taxa are skipped with a warning.
+#'
+#' @param aln_ptr External pointer from read_nexus_rcpp / read_phylip_files_rcpp
+#' @param taxon1,taxon2,taxon3,taxon4 Taxon names (any order)
+#' @return Named list with elements:
+#'   taxon1, taxon2, taxon3, taxon4 (length-1 character vectors),
+#'   n_total, n_counted (scalars),
+#'   site_pattern (numeric vector of length 256)
+#' @keywords internal
+quartet_site_pattern_rcpp <- function(aln_ptr, taxon1, taxon2, taxon3, taxon4) {
+    .Call(`_phylotriplet_quartet_site_pattern_rcpp`, aln_ptr, taxon1, taxon2, taxon3, taxon4)
+}
+
+#' Compute site-pattern counts for a k-tuple of taxa (internal)
+#'
+#' Taxa names may be given in any order (k >= 2).  Genes missing any taxon
+#' are skipped with a warning.  Throws if a taxon is absent from every gene.
+#'
+#' @param aln_ptr External pointer from read_nexus_rcpp / read_phylip_files_rcpp
+#' @param taxa Character vector of taxon names (any order, length >= 2)
+#' @return Named list with elements:
+#'   taxa (character vector of length k, sorted),
+#'   n_total, n_counted (scalars),
+#'   site_pattern (numeric vector of length 4^k)
+#' @keywords internal
+site_pattern_rcpp <- function(aln_ptr, taxa) {
+    .Call(`_phylotriplet_site_pattern_rcpp`, aln_ptr, taxa)
+}
+
