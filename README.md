@@ -153,7 +153,7 @@ aln = pt.read_phylip_files(["gene1.phy", "gene2.phy"],
                             gene_names=["COI", "CYTB"])
 
 # Compute aggregate triplet site-pattern counts
-patterns = aln.compute_site_patterns()   # list of TripletSitePatterns
+patterns = aln.compute_site_patterns()   # list of TuplePatterns
 for p in patterns:
     # p.taxa       — sorted list of 3 taxon names
     # p.n          — list of 64 floats; p.n[i*16 + j*4 + k] counts sites
@@ -238,7 +238,7 @@ pytest tests/test_bindings_python.py -v
 
 `tests/test_bindings_python.py` covers the Python bindings for sequence alignment:
 `read_nexus_file`, `read_phylip_file`, `read_phylip_files`,
-`MultiGeneAlignment`, and `TripletSitePatterns`.
+`MultiGeneAlignment`, and `TuplePatterns`.
 
 ### R
 

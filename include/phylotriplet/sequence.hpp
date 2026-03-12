@@ -87,6 +87,29 @@ inline uint8_t char_to_nucleotide(char c) {
   }
 }
 
+/** Returns true if the bitmask-encoded nucleotide represents a gap. */
+inline bool is_gap(uint8_t b) { return b == NUC_GAP; }
+
+/**
+ * Map a bitmask-encoded nucleotide to its probability distribution over
+ * {A=0, C=1, G=2, T=3}.
+ *
+ * Ambiguity codes are treated as equiprobable mixtures over the bases they
+ * represent (e.g. R = 0.5 A + 0.5 G).  NUC_GAP returns {0,0,0,0}; callers
+ * should check is_gap() first.
+ */
+inline NucleotideDistribution nucleotide_distribution(uint8_t b) {
+  int count = 0;
+  if (b & NUC_A) ++count;
+  if (b & NUC_C) ++count;
+  if (b & NUC_G) ++count;
+  if (b & NUC_T) ++count;
+  if (count == 0) return {0.0, 0.0, 0.0, 0.0};
+  const double w = 1.0 / count;
+  return {(b & NUC_A) ? w : 0.0, (b & NUC_C) ? w : 0.0, (b & NUC_G) ? w : 0.0,
+          (b & NUC_T) ? w : 0.0};
+}
+
 /** A single named sequence; bases are bitmask-encoded (see NUC_* constants). */
 struct Sequence {
   std::string taxon;
@@ -108,6 +131,27 @@ struct GeneAlignment {
     ns.reserve(sequences.size());
     for (const auto& s : sequences) ns.push_back(s.taxon);
     return ns;
+  }
+
+  /**
+   * Empirical nucleotide frequencies (pi_A, pi_C, pi_G, pi_T).
+   * Gaps are excluded; ambiguous bases contribute fractionally.
+   * Returns {0,0,0,0} for an all-gap or empty alignment.
+   */
+  NucleotideDistribution nucleotide_frequencies() const {
+    NucleotideDistribution freq = {0.0, 0.0, 0.0, 0.0};
+    double total = 0.0;
+    for (const auto& seq : sequences) {
+      for (uint8_t b : seq.bases) {
+        if (is_gap(b)) continue;
+        const NucleotideDistribution d = nucleotide_distribution(b);
+        for (int i = 0; i < 4; ++i) freq[i] += d[i];
+        total += 1.0;
+      }
+    }
+    if (total > 0.0)
+      for (int i = 0; i < 4; ++i) freq[i] /= total;
+    return freq;
   }
 };
 
@@ -134,6 +178,29 @@ struct MultiGeneAlignment {
     for (const auto& g : genes)
       for (const auto& s : g.sequences) seen.insert(s.taxon);
     return {seen.begin(), seen.end()};
+  }
+
+  /**
+   * Empirical nucleotide frequencies (pi_A, pi_C, pi_G, pi_T) across all
+   * genes.  Gaps are excluded; ambiguous bases contribute fractionally.
+   * Returns {0,0,0,0} if all sites are gaps or the alignment is empty.
+   */
+  NucleotideDistribution nucleotide_frequencies() const {
+    NucleotideDistribution freq = {0.0, 0.0, 0.0, 0.0};
+    double total = 0.0;
+    for (const auto& gene : genes) {
+      for (const auto& seq : gene.sequences) {
+        for (uint8_t b : seq.bases) {
+          if (is_gap(b)) continue;
+          const NucleotideDistribution d = nucleotide_distribution(b);
+          for (int i = 0; i < 4; ++i) freq[i] += d[i];
+          total += 1.0;
+        }
+      }
+    }
+    if (total > 0.0)
+      for (int i = 0; i < 4; ++i) freq[i] /= total;
+    return freq;
   }
 };
 
@@ -177,8 +244,5 @@ struct TuplePatterns {
   /** Number of taxa in the tuple. */
   size_t order() const { return taxa.size(); }
 };
-
-/** Backward-compatible alias: a 3-taxon TuplePatterns. */
-using TripletSitePatterns = TuplePatterns;
 
 }  // namespace phylotriplet

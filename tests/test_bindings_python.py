@@ -193,7 +193,7 @@ class TestComputeSitePatterns:
         aln = pt.read_nexus_file(nexus_3tax)
         pats = aln.triplet_site_patterns()
         assert isinstance(pats, list)
-        assert all(isinstance(p, pt.TripletSitePatterns) for p in pats)
+        assert all(isinstance(p, pt.TuplePatterns) for p in pats)
 
     def test_three_taxa_one_triplet(self, nexus_3tax):
         aln = pt.read_nexus_file(nexus_3tax)
@@ -281,7 +281,7 @@ class TestComputeSitePatterns:
     def test_repr_of_triplet_site_patterns(self, nexus_3tax):
         p = pt.read_nexus_file(nexus_3tax).triplet_site_patterns()[0]
         r = repr(p)
-        assert "TripletSitePatterns" in r
+        assert "TuplePatterns" in r
         assert "n_counted" in r
 
     def test_end_to_end_phylip(self, phylip_seq):

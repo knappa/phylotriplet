@@ -26,7 +26,7 @@ static GeneAlignment make_gene(
 }
 
 // Sum all 64 site-pattern counts.
-static double total_pattern_mass(const TripletSitePatterns& pats) {
+static double total_pattern_mass(const TuplePatterns& pats) {
   double t = 0.0;
   for (int k = 0; k < 64; ++k) t += pats.site_pattern[k];
   return t;
@@ -427,7 +427,7 @@ TEST_CASE("for_each_site_pattern: produces n choose 3 triplets") {
                                   {"D", "ACGT"},
                                   {"E", "ACGT"}});
   int count = 0;
-  for_each_site_pattern(gene, [&](TripletSitePatterns) { ++count; });
+  for_each_site_pattern(gene, [&](TuplePatterns) { ++count; });
   REQUIRE(count == 10);
 }
 
@@ -438,18 +438,18 @@ TEST_CASE("for_each_site_pattern: fewer than 3 taxa yields no triplets") {
       taxa.push_back({std::string(1, static_cast<char>('A' + i)), "ACGT"});
     GeneAlignment gene = make_gene(taxa);
     int count = 0;
-    for_each_site_pattern(gene, [&](TripletSitePatterns) { ++count; });
+    for_each_site_pattern(gene, [&](TuplePatterns) { ++count; });
     REQUIRE(count == 0);
   }
 }
 
 TEST_CASE(
-    "for_each_site_pattern: taxa in TripletSitePatterns are lexicographically "
+    "for_each_site_pattern: taxa in TuplePatterns are lexicographically "
     "sorted") {
   // Input taxa in reverse order: Zebra, Mole, Aardvark
   GeneAlignment gene =
       make_gene({{"Zebra", "ACGT"}, {"Mole", "ACGT"}, {"Aardvark", "ACGT"}});
-  for_each_site_pattern(gene, [](TripletSitePatterns pats) {
+  for_each_site_pattern(gene, [](TuplePatterns pats) {
     REQUIRE(pats.taxa[0] <= pats.taxa[1]);
     REQUIRE(pats.taxa[1] <= pats.taxa[2]);
     REQUIRE(pats.taxa[0] == "Aardvark");
@@ -461,7 +461,7 @@ TEST_CASE(
 TEST_CASE("for_each_site_pattern: n_total and n_counted") {
   // 4 sites: 3 normal + 1 gap in taxon B
   GeneAlignment gene = make_gene({{"A", "AAAA"}, {"B", "A-AA"}, {"C", "AAAA"}});
-  for_each_site_pattern(gene, [](TripletSitePatterns pats) {
+  for_each_site_pattern(gene, [](TuplePatterns pats) {
     REQUIRE(pats.n_total == Approx(4.0));
     REQUIRE(pats.n_counted == Approx(3.0));
   });
@@ -470,7 +470,7 @@ TEST_CASE("for_each_site_pattern: n_total and n_counted") {
 TEST_CASE("for_each_site_pattern: all-A sites accumulate in AAA bucket") {
   // Pattern AAA has index 0*16+0*4+0 = 0
   GeneAlignment gene = make_gene({{"A", "AAA"}, {"B", "AAA"}, {"C", "AAA"}});
-  for_each_site_pattern(gene, [](TripletSitePatterns pats) {
+  for_each_site_pattern(gene, [](TuplePatterns pats) {
     REQUIRE(pats.site_pattern[0] == Approx(3.0));
     REQUIRE(total_pattern_mass(pats) == Approx(3.0));
   });
@@ -482,7 +482,7 @@ TEST_CASE(
   // Sorted taxa: A < B < C
   // A=A(i=0), B=C(j=1), C=G(k=2) → index 0*16+1*4+2 = 6
   GeneAlignment gene = make_gene({{"A", "A"}, {"B", "C"}, {"C", "G"}});
-  for_each_site_pattern(gene, [](TripletSitePatterns pats) {
+  for_each_site_pattern(gene, [](TuplePatterns pats) {
     REQUIRE(pats.n_counted == Approx(1.0));
     REQUIRE(pats.site_pattern[0 * 16 + 1 * 4 + 2] ==
             Approx(1.0));  // A=0, C=1, G=2
@@ -494,7 +494,7 @@ TEST_CASE(
     "for_each_site_pattern: gap sites are excluded from n and n_counted") {
   // Site 1 has a gap in B; sites 0 and 2 are normal AAA
   GeneAlignment gene = make_gene({{"A", "AAA"}, {"B", "A-A"}, {"C", "AAA"}});
-  for_each_site_pattern(gene, [](TripletSitePatterns pats) {
+  for_each_site_pattern(gene, [](TuplePatterns pats) {
     REQUIRE(pats.n_counted == Approx(2.0));
     REQUIRE(pats.site_pattern[0] == Approx(2.0));  // two AAA sites
     REQUIRE(total_pattern_mass(pats) == Approx(2.0));
@@ -507,7 +507,7 @@ TEST_CASE(
   // A=A(dp={1,0,0,0}), B=C(dq={0,1,0,0}), C=R(dr={0.5,0,0.5,0})
   // Expected: n[ACA]=0.5 (index 0*16+1*4+0=4), n[ACG]=0.5 (index 0*16+1*4+2=6)
   GeneAlignment gene = make_gene({{"A", "A"}, {"B", "C"}, {"C", "R"}});
-  for_each_site_pattern(gene, [](TripletSitePatterns pats) {
+  for_each_site_pattern(gene, [](TuplePatterns pats) {
     REQUIRE(pats.n_counted == Approx(1.0));
     REQUIRE(pats.site_pattern[4] == Approx(0.5));  // ACA
     REQUIRE(pats.site_pattern[6] == Approx(0.5));  // ACG
@@ -520,7 +520,7 @@ TEST_CASE(
   // A=A, B=A, C=N  →  dp={1,0,0,0}, dq={1,0,0,0}, dr={0.25,0.25,0.25,0.25}
   // AAA=0.25, AAC=0.25, AAG=0.25, AAT=0.25  (indices 0,1,2,3)
   GeneAlignment gene = make_gene({{"A", "A"}, {"B", "A"}, {"C", "N"}});
-  for_each_site_pattern(gene, [](TripletSitePatterns pats) {
+  for_each_site_pattern(gene, [](TuplePatterns pats) {
     REQUIRE(pats.site_pattern[0] == Approx(0.25));  // AAA
     REQUIRE(pats.site_pattern[1] == Approx(0.25));  // AAC
     REQUIRE(pats.site_pattern[2] == Approx(0.25));  // AAG
@@ -536,7 +536,7 @@ TEST_CASE(
   GeneAlignment gene = make_gene({{"A", "ACGTRYNWBDHVMSK"},
                                   {"B", "TGCANNRYACGTRYN"},
                                   {"C", "GCATNRYWBDHVMSK"}});
-  for_each_site_pattern(gene, [](TripletSitePatterns pats) {
+  for_each_site_pattern(gene, [](TuplePatterns pats) {
     REQUIRE(total_pattern_mass(pats) == Approx(pats.n_counted));
   });
 }
@@ -548,7 +548,7 @@ TEST_CASE(
   // Sorted: A(ip=1)=A, B(ip=2)=C, C(ip=0)=T
   // Site 0: A(i=0), C(j=1), T(k=3) → index 0*16+1*4+3 = 7
   GeneAlignment gene = make_gene({{"C", "T"}, {"A", "A"}, {"B", "C"}});
-  for_each_site_pattern(gene, [](TripletSitePatterns pats) {
+  for_each_site_pattern(gene, [](TuplePatterns pats) {
     REQUIRE(pats.taxa[0] == "A");
     REQUIRE(pats.taxa[1] == "B");
     REQUIRE(pats.taxa[2] == "C");
@@ -573,7 +573,7 @@ TEST_CASE("compute_aggregate_site_patterns: accumulates counts across genes") {
   auto patterns = compute_aggregate_site_patterns(aln);
   REQUIRE(patterns.size() == 1);
 
-  const TripletSitePatterns& pats = patterns[0];
+  const TuplePatterns& pats = patterns[0];
   REQUIRE(pats.n_total == Approx(2.0));
   REQUIRE(pats.n_counted == Approx(2.0));
   REQUIRE(pats.site_pattern[0] == Approx(1.0));   // AAA from g1

@@ -671,3 +671,80 @@ site_pattern.PhylotripletGene <- function(alignment, taxa, ...) {
     site_pattern = raw$site_pattern
   )
 }
+
+#' Compute triplet topology weights
+#'
+#' Computes weights for the three possible rooted triplet topologies for a
+#' specific taxon triplet.  The taxon names may be given in any order; they
+#' are sorted lexicographically internally.
+#'
+#' The three returned weights correspond to topologies where a, b, c are the
+#' taxon names in lexicographic order:
+#' \describe{
+#'   \item{w[1]}{(a,b)|c  -- a and b are sisters}
+#'   \item{w[2]}{(a,c)|b  -- a and c are sisters}
+#'   \item{w[3]}{(b,c)|a  -- b and c are sisters}
+#' }
+#'
+#' @param alignment A PhylotripletAlignment or PhylotripletGene object.
+#' @param taxon1,taxon2,taxon3 Character scalars naming the three taxa.
+#' @param ... Ignored.
+#'
+#' @return A numeric vector of length 3 with weights for the three topologies.
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' aln <- read_nexus("mydata.nex")
+#' w <- compute_triplet_weights(aln, "human", "chimp", "gorilla")
+#' }
+compute_triplet_weights <- function(alignment, taxon1, taxon2, taxon3, ...) {
+  UseMethod("compute_triplet_weights")
+}
+
+#' @export
+compute_triplet_weights.PhylotripletAlignment <- function(alignment, taxon1,
+                                                          taxon2, taxon3, ...) {
+  compute_triplet_weights_rcpp(alignment$.ptr, taxon1, taxon2, taxon3)
+}
+
+#' @export
+compute_triplet_weights.PhylotripletGene <- function(alignment, taxon1,
+                                                     taxon2, taxon3, ...) {
+  gene_compute_triplet_weights_rcpp(alignment$.ptr, taxon1, taxon2, taxon3)
+}
+
+#' Empirical nucleotide frequencies
+#'
+#' Returns empirical nucleotide frequencies (pi_A, pi_C, pi_G, pi_T) computed
+#' from the alignment.  Gap columns are excluded; ambiguous bases contribute
+#' fractionally (e.g. R counts as 0.5 A and 0.5 G).
+#'
+#' @param alignment A \code{PhylotripletAlignment} or \code{PhylotripletGene}
+#'   object.
+#' @param ... Ignored.
+#'
+#' @return A named numeric vector of length 4 with names
+#'   \code{c("pi_A", "pi_C", "pi_G", "pi_T")} that sums to 1.
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' aln <- read_nexus("mydata.nex")
+#' nucleotide_frequencies(aln)
+#' }
+nucleotide_frequencies <- function(alignment, ...) {
+  UseMethod("nucleotide_frequencies")
+}
+
+#' @export
+nucleotide_frequencies.PhylotripletAlignment <- function(alignment, ...) {
+  nucleotide_frequencies_rcpp(alignment$.ptr)
+}
+
+#' @export
+nucleotide_frequencies.PhylotripletGene <- function(alignment, ...) {
+  gene_nucleotide_frequencies_rcpp(alignment$.ptr)
+}

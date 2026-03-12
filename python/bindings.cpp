@@ -97,8 +97,6 @@ PYBIND11_MODULE(phylotriplet, m) {
         s += "], n_counted=" + std::to_string(p.n_counted) + ")";
         return s;
       });
-  // Backward-compatible alias
-  m.attr("TripletSitePatterns") = m.attr("TuplePatterns");
 
   py::class_<GeneAlignment>(m, "GeneAlignment",
                             "A single-gene alignment of named sequences.\n\n"
@@ -150,6 +148,21 @@ PYBIND11_MODULE(phylotriplet, m) {
           py::arg("taxa"),
           "Site-pattern counts for a specific k-tuple of taxa (k >= 2).\n\n"
           "Raises ValueError if any taxon is absent.")
+      .def(
+          "compute_triplet_weights",
+          [](const GeneAlignment& gene, const std::string& t1,
+             const std::string& t2, const std::string& t3) {
+            return compute_triplet_weights(gene, t1, t2, t3);
+          },
+          py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
+          "Weights for the three rooted triplet topologies.\n\n"
+          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where a, b, c\n"
+          "are the taxon names in lexicographic order.\n\n"
+          "Raises RuntimeError: not yet implemented.")
+      .def("nucleotide_frequencies", &GeneAlignment::nucleotide_frequencies,
+           "Empirical nucleotide frequencies (pi_A, pi_C, pi_G, pi_T).\n\n"
+           "Returns a list of 4 floats that sum to 1.0.  Gaps are excluded;\n"
+           "ambiguous bases contribute fractionally.")
       .def("__repr__", [](const GeneAlignment& g) {
         return "GeneAlignment(gene_name='" + g.gene_name +
                "', num_taxa=" + std::to_string(g.num_taxa()) +
@@ -260,6 +273,24 @@ PYBIND11_MODULE(phylotriplet, m) {
           "    taxa: list of taxon names (any order, length >= 2)\n\n"
           "Returns:\n"
           "    TuplePatterns")
+      .def(
+          "compute_triplet_weights",
+          [](const MultiGeneAlignment& aln, const std::string& t1,
+             const std::string& t2, const std::string& t3) {
+            return compute_triplet_weights(aln, t1, t2, t3);
+          },
+          py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
+          "Aggregate weights for the three rooted triplet topologies.\n\n"
+          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where a, b, c\n"
+          "are the taxon names in lexicographic order.  Genes that do not\n"
+          "contain all three taxa are skipped with a warning.\n\n"
+          "Raises RuntimeError: not yet implemented.")
+      .def("nucleotide_frequencies",
+           &MultiGeneAlignment::nucleotide_frequencies,
+           "Empirical nucleotide frequencies (pi_A, pi_C, pi_G, pi_T) across\n"
+           "all genes.\n\n"
+           "Returns a list of 4 floats that sum to 1.0.  Gaps are excluded;\n"
+           "ambiguous bases contribute fractionally.")
       .def("__repr__", [](const MultiGeneAlignment& aln) {
         return "MultiGeneAlignment(num_genes=" +
                std::to_string(aln.num_genes()) +

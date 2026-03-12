@@ -104,7 +104,7 @@ SEXP read_phylip_files_rcpp(std::vector<std::string> filepaths,
 //' Get number of genes in a MultiGeneAlignment (internal)
 //'
 //' @param aln_ptr External pointer from read_nexus_rcpp /
-//read_phylip_files_rcpp ' @return Integer ' @keywords internal
+// read_phylip_files_rcpp ' @return Integer ' @keywords internal
 // [[Rcpp::export]]
 int alignment_num_genes_rcpp(SEXP aln_ptr) {
   Rcpp::XPtr<MultiGeneAlignment> ptr(aln_ptr);
@@ -114,8 +114,8 @@ int alignment_num_genes_rcpp(SEXP aln_ptr) {
 //' Get sorted taxon names from a MultiGeneAlignment (internal)
 //'
 //' @param aln_ptr External pointer from read_nexus_rcpp /
-//read_phylip_files_rcpp ' @return Character vector of taxon names ' @keywords
-//internal
+// read_phylip_files_rcpp ' @return Character vector of taxon names ' @keywords
+// internal
 // [[Rcpp::export]]
 CharacterVector alignment_taxon_names_rcpp(SEXP aln_ptr) {
   Rcpp::XPtr<MultiGeneAlignment> ptr(aln_ptr);
@@ -126,7 +126,7 @@ CharacterVector alignment_taxon_names_rcpp(SEXP aln_ptr) {
 //' Get gene names from a MultiGeneAlignment (internal)
 //'
 //' @param aln_ptr External pointer from read_nexus_rcpp /
-//read_phylip_files_rcpp ' @return Character vector of gene names in order '
+// read_phylip_files_rcpp ' @return Character vector of gene names in order '
 //@keywords internal
 // [[Rcpp::export]]
 CharacterVector alignment_gene_names_rcpp(SEXP aln_ptr) {
@@ -138,8 +138,9 @@ CharacterVector alignment_gene_names_rcpp(SEXP aln_ptr) {
 //' Extract a single gene from a MultiGeneAlignment by index or name (internal)
 //'
 //' @param aln_ptr External pointer from read_nexus_rcpp /
-//read_phylip_files_rcpp ' @param idx 1-based integer index, or a character gene
-//name ' @return External pointer to a GeneAlignment (copy) ' @keywords internal
+// read_phylip_files_rcpp ' @param idx 1-based integer index, or a character
+// gene name ' @return External pointer to a GeneAlignment (copy) ' @keywords
+// internal
 // [[Rcpp::export]]
 SEXP get_gene_rcpp(SEXP aln_ptr, SEXP idx) {
   Rcpp::XPtr<MultiGeneAlignment> ptr(aln_ptr);
@@ -213,7 +214,7 @@ List gene_triplet_site_patterns_rcpp(SEXP gene_ptr) {
   NumericMatrix n_mat(nrow, 64);
 
   for (int i = 0; i < nrow; ++i) {
-    const TripletSitePatterns& p = patterns[i];
+    const TuplePatterns& p = patterns[i];
     taxon1[i] = p.taxa[0];
     taxon2[i] = p.taxa[1];
     taxon3[i] = p.taxa[2];
@@ -238,7 +239,7 @@ List gene_triplet_site_patterns_rcpp(SEXP gene_ptr) {
 List gene_triplet_site_pattern_rcpp(SEXP gene_ptr, std::string taxon1,
                                     std::string taxon2, std::string taxon3) {
   Rcpp::XPtr<GeneAlignment> ptr(gene_ptr);
-  TripletSitePatterns p = triplet_site_pattern(*ptr, taxon1, taxon2, taxon3);
+  TuplePatterns p = triplet_site_pattern(*ptr, taxon1, taxon2, taxon3);
   NumericVector sp(64);
   for (int k = 0; k < 64; ++k) sp[k] = p.site_pattern[k];
   return List::create(Named("taxon1") = p.taxa[0], Named("taxon2") = p.taxa[1],
@@ -326,10 +327,10 @@ List gene_site_pattern_rcpp(SEXP gene_ptr, std::vector<std::string> taxa) {
 //' Compute aggregate triplet site-pattern counts (internal)
 //'
 //' @param aln_ptr External pointer from read_nexus_rcpp /
-//read_phylip_files_rcpp ' @return Named list with elements: '   taxon1, taxon2,
-//taxon3 (character vectors), '   n_total, n_counted (numeric vectors), '
-//site_pattern (numeric matrix, one row per triplet, 64 columns) ' @keywords
-//internal
+// read_phylip_files_rcpp ' @return Named list with elements: '   taxon1,
+// taxon2, taxon3 (character vectors), '   n_total, n_counted (numeric vectors),
+// ' site_pattern (numeric matrix, one row per triplet, 64 columns) ' @keywords
+// internal
 // [[Rcpp::export]]
 List triplet_site_patterns_rcpp(SEXP aln_ptr) {
   Rcpp::XPtr<MultiGeneAlignment> ptr(aln_ptr);
@@ -341,7 +342,7 @@ List triplet_site_patterns_rcpp(SEXP aln_ptr) {
   NumericMatrix n_mat(nrow, 64);
 
   for (int i = 0; i < nrow; ++i) {
-    const TripletSitePatterns& p = patterns[i];
+    const TuplePatterns& p = patterns[i];
     taxon1[i] = p.taxa[0];
     taxon2[i] = p.taxa[1];
     taxon3[i] = p.taxa[2];
@@ -362,7 +363,7 @@ List triplet_site_patterns_rcpp(SEXP aln_ptr) {
 //' three taxa are skipped with a warning.
 //'
 //' @param aln_ptr External pointer from read_nexus_rcpp /
-//read_phylip_files_rcpp ' @param taxon1,taxon2,taxon3 Taxon names (any order)
+// read_phylip_files_rcpp ' @param taxon1,taxon2,taxon3 Taxon names (any order)
 //' @return Named list with elements:
 //'   taxon1, taxon2, taxon3 (length-1 character vectors),
 //'   n_total, n_counted (scalars),
@@ -372,7 +373,7 @@ List triplet_site_patterns_rcpp(SEXP aln_ptr) {
 List triplet_site_pattern_rcpp(SEXP aln_ptr, std::string taxon1,
                                std::string taxon2, std::string taxon3) {
   Rcpp::XPtr<MultiGeneAlignment> ptr(aln_ptr);
-  TripletSitePatterns p = triplet_site_pattern(*ptr, taxon1, taxon2, taxon3);
+  TuplePatterns p = triplet_site_pattern(*ptr, taxon1, taxon2, taxon3);
   NumericVector sp(64);
   for (int k = 0; k < 64; ++k) sp[k] = p.site_pattern[k];
   return List::create(Named("taxon1") = p.taxa[0], Named("taxon2") = p.taxa[1],
@@ -384,9 +385,9 @@ List triplet_site_pattern_rcpp(SEXP aln_ptr, std::string taxon1,
 //' Compute aggregate quartet site-pattern counts (internal)
 //'
 //' @param aln_ptr External pointer from read_nexus_rcpp /
-//read_phylip_files_rcpp ' @return Named list with elements: '   taxon1, taxon2,
-//taxon3, taxon4 (character vectors), '   n_total, n_counted (numeric vectors),
-//'   site_pattern (numeric matrix, one row per quartet, 256 columns)
+// read_phylip_files_rcpp ' @return Named list with elements: '   taxon1,
+// taxon2, taxon3, taxon4 (character vectors), '   n_total, n_counted (numeric
+// vectors), '   site_pattern (numeric matrix, one row per quartet, 256 columns)
 //' @keywords internal
 // [[Rcpp::export]]
 List quartet_site_patterns_rcpp(SEXP aln_ptr) {
@@ -422,8 +423,8 @@ List quartet_site_patterns_rcpp(SEXP aln_ptr) {
 //' four taxa are skipped with a warning.
 //'
 //' @param aln_ptr External pointer from read_nexus_rcpp /
-//read_phylip_files_rcpp ' @param taxon1,taxon2,taxon3,taxon4 Taxon names (any
-//order) ' @return Named list with elements: '   taxon1, taxon2, taxon3, taxon4
+// read_phylip_files_rcpp ' @param taxon1,taxon2,taxon3,taxon4 Taxon names (any
+// order) ' @return Named list with elements: '   taxon1, taxon2, taxon3, taxon4
 //(length-1 character vectors), '   n_total, n_counted (scalars), ' site_pattern
 //(numeric vector of length 256) ' @keywords internal
 // [[Rcpp::export]]
@@ -447,9 +448,9 @@ List quartet_site_pattern_rcpp(SEXP aln_ptr, std::string taxon1,
 //' are skipped with a warning.  Throws if a taxon is absent from every gene.
 //'
 //' @param aln_ptr External pointer from read_nexus_rcpp /
-//read_phylip_files_rcpp ' @param taxa Character vector of taxon names (any
-//order, length >= 2) ' @return Named list with elements: '   taxa (character
-//vector of length k, sorted), '   n_total, n_counted (scalars), ' site_pattern
+// read_phylip_files_rcpp ' @param taxa Character vector of taxon names (any
+// order, length >= 2) ' @return Named list with elements: '   taxa (character
+// vector of length k, sorted), '   n_total, n_counted (scalars), ' site_pattern
 //(numeric vector of length 4^k) ' @keywords internal
 // [[Rcpp::export]]
 List site_pattern_rcpp(SEXP aln_ptr, std::vector<std::string> taxa) {
@@ -464,10 +465,11 @@ List site_pattern_rcpp(SEXP aln_ptr, std::vector<std::string> taxa) {
                       Named("site_pattern") = sp);
 }
 
-//' Compute triplet topology weights for a specific taxon triplet (multi-gene, internal)
+//' Compute triplet topology weights for a specific taxon triplet (multi-gene,
+// internal)
 //'
-//' @param aln_ptr External pointer from read_nexus_rcpp / read_phylip_files_rcpp
-//' @param taxon1,taxon2,taxon3 Taxon names (any order)
+//' @param aln_ptr External pointer from read_nexus_rcpp /
+// read_phylip_files_rcpp ' @param taxon1,taxon2,taxon3 Taxon names (any order)
 //' @return Numeric vector of length 3: weights for the three rooted triplet
 //'   topologies (ab|c, ac|b, bc|a where a,b,c are the sorted taxon names)
 //' @keywords internal
@@ -478,11 +480,14 @@ NumericVector compute_triplet_weights_rcpp(SEXP aln_ptr, std::string taxon1,
   Rcpp::XPtr<MultiGeneAlignment> ptr(aln_ptr);
   auto w = compute_triplet_weights(*ptr, taxon1, taxon2, taxon3);
   NumericVector out(3);
-  out[0] = w[0]; out[1] = w[1]; out[2] = w[2];
+  out[0] = w[0];
+  out[1] = w[1];
+  out[2] = w[2];
   return out;
 }
 
-//' Compute triplet topology weights for a specific taxon triplet (single gene, internal)
+//' Compute triplet topology weights for a specific taxon triplet (single gene,
+// internal)
 //'
 //' @param gene_ptr External pointer from get_gene_rcpp
 //' @param taxon1,taxon2,taxon3 Taxon names (any order)
@@ -497,6 +502,40 @@ NumericVector gene_compute_triplet_weights_rcpp(SEXP gene_ptr,
   Rcpp::XPtr<GeneAlignment> ptr(gene_ptr);
   auto w = compute_triplet_weights(*ptr, taxon1, taxon2, taxon3);
   NumericVector out(3);
-  out[0] = w[0]; out[1] = w[1]; out[2] = w[2];
+  out[0] = w[0];
+  out[1] = w[1];
+  out[2] = w[2];
+  return out;
+}
+
+//' Compute empirical nucleotide frequencies for a multi-gene alignment
+//' (internal)
+//'
+//' @param aln_ptr External pointer from read_nexus_rcpp /
+//'   read_phylip_files_rcpp
+//' @return Named numeric vector of length 4: (pi_A, pi_C, pi_G, pi_T)
+//' @keywords internal
+// [[Rcpp::export]]
+NumericVector nucleotide_frequencies_rcpp(SEXP aln_ptr) {
+  Rcpp::XPtr<MultiGeneAlignment> ptr(aln_ptr);
+  auto f = ptr->nucleotide_frequencies();
+  NumericVector out =
+      NumericVector::create(Named("pi_A") = f[0], Named("pi_C") = f[1],
+                            Named("pi_G") = f[2], Named("pi_T") = f[3]);
+  return out;
+}
+
+//' Compute empirical nucleotide frequencies for a single gene (internal)
+//'
+//' @param gene_ptr External pointer from get_gene_rcpp
+//' @return Named numeric vector of length 4: (pi_A, pi_C, pi_G, pi_T)
+//' @keywords internal
+// [[Rcpp::export]]
+NumericVector gene_nucleotide_frequencies_rcpp(SEXP gene_ptr) {
+  Rcpp::XPtr<GeneAlignment> ptr(gene_ptr);
+  auto f = ptr->nucleotide_frequencies();
+  NumericVector out =
+      NumericVector::create(Named("pi_A") = f[0], Named("pi_C") = f[1],
+                            Named("pi_G") = f[2], Named("pi_T") = f[3]);
   return out;
 }
