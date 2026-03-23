@@ -1,6 +1,8 @@
 #pragma once
 #include <Eigen/Core>
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <stdexcept>
 
 #include "sequence.hpp"
@@ -90,39 +92,10 @@ inline std::array<Eigen::Matrix4d, 4> compute_transition_matrices(
 inline std::array<Eigen::Matrix4d, 4> compute_transition_matrices(
     const std::array<double, 4>& pis, const std::array<double, 6>& ss,
     const std::array<double, 4>& branch_lengths) {
-  auto [left, right, evals] = compute_decomposition(pis, ss);
-
+  Eigen::Matrix4d left, right;
+  Eigen::Vector4d evals;
+  std::tie(left, right, evals) = compute_decomposition(pis, ss);
   return compute_transition_matrices(left, right, evals, branch_lengths);
-}
-
-inline double compute_log_likelihood(
-    const std::array<double, 4>& pis, Eigen::Matrix4d left,
-    Eigen::Matrix4d right, Eigen::Vector4d evals,
-    const std::array<double, 4>& branch_lengths,
-    const TuplePatterns& site_patterns, const std::array<int, 3>& taxon_order) {
-  // branch_lengths are (a,i), (b,i), (c,r), (i,r)
-  // taxon_order identifies which taxon is a,b,c in site_patterns (which is
-  // sorted by name)
-
-  auto [p_t1, p_t2, p_t3, p_t4] =
-      compute_transition_matrices(left, right, evals, branch_lengths);
-
-  return compute_log_likelihood(pis, p_t1, p_t2, p_t3, p_t4, site_patterns,
-                                taxon_order);
-}
-
-inline double compute_log_likelihood(
-    const std::array<double, 4>& pis, const std::array<double, 6>& ss,
-    const std::array<double, 4>& branch_lengths,
-    const TuplePatterns& site_patterns, const std::array<int, 3>& taxon_order) {
-  // branch_lengths are (a,i), (b,i), (c,r), (i,r)
-  // taxon_order identifies which taxon is a,b,c in site_patterns (which is
-  // sorted by name)
-  auto [p_t1, p_t2, p_t3, p_t4] =
-      compute_transition_matrices(pis, ss, branch_lengths);
-
-  return compute_log_likelihood(pis, p_t1, p_t2, p_t3, p_t4, site_patterns,
-                                taxon_order);
 }
 
 inline double compute_log_likelihood(const std::array<double, 4>& pis,
@@ -132,7 +105,8 @@ inline double compute_log_likelihood(const std::array<double, 4>& pis,
                                      const std::array<int, 3>& taxon_order) {
   // branch_lengths are (a,i), (b,i), (c,r), (i,r)
   // taxon_order identifies which taxon is a,b,c in site_patterns (which is
-  // sorted by name)
+  // sorted by name) should be 0,1,2 in some order. will fail in interesting
+  // ways if not.
   auto log_p_t1 = p_t1.array().max(1e-10).log().matrix();
   auto log_p_t2 = p_t2.array().max(1e-10).log().matrix();
   auto log_p_t3 = p_t3.array().max(1e-10).log().matrix();
@@ -184,6 +158,188 @@ inline double compute_log_likelihood(const std::array<double, 4>& pis,
   return log_likelihood;
 }
 
+inline double compute_log_likelihood(
+    const std::array<double, 4>& pis, Eigen::Matrix4d left,
+    Eigen::Matrix4d right, Eigen::Vector4d evals,
+    const std::array<double, 4>& branch_lengths,
+    const TuplePatterns& site_patterns, const std::array<int, 3>& taxon_order) {
+  const auto mats =
+      compute_transition_matrices(left, right, evals, branch_lengths);
+  return compute_log_likelihood(pis, mats[0], mats[1], mats[2], mats[3],
+                                site_patterns, taxon_order);
+}
+
+inline double compute_log_likelihood(
+    const std::array<double, 4>& pis, const std::array<double, 6>& ss,
+    const std::array<double, 4>& branch_lengths,
+    const TuplePatterns& site_patterns, const std::array<int, 3>& taxon_order) {
+  const auto mats = compute_transition_matrices(pis, ss, branch_lengths);
+  return compute_log_likelihood(pis, mats[0], mats[1], mats[2], mats[3],
+                                site_patterns, taxon_order);
+}
+
+template <typename T, size_t N>
+inline T log_sum_exp(std::array<T, N> values) {
+	std::sort(values.begin(), values.end(), std::less<T>());
+	T accum = values[0];
+	for (size_t i = 1; i < N; ++i) {
+		accum = values[i] + log1p(exp(accum - values[i]));
+	}
+	return accum;
+}
+
+double log_diff_exp(double log_a, double log_b) {
+  if (log_a < log_b) {
+    throw std::invalid_argument("log_diff_exp: log_a must be >= log_b");
+  }
+  return log_a + log1p(-exp(log_b - log_a));
+}
+
+inline std::array<double, 4> compute_jc69_site_pattern_weights(double tau1,
+                                                               double tau2,
+                                                               double theta) {
+  /* log becomes constexpr in C++26? change when that becomes common */
+  const double log_3 = log(3.0);
+  const double log_6 = log(6.0);
+  const double log_9 = log(9.0);
+  const double log_18 = log(18.0);
+  const double log_54 = log(54.0);
+  const double log_64 = log(64.0);
+
+  const double log_2theta_term = log_3 + log1p(2.0 * theta / 3.0);
+  const double log_4theta_term = log_3 + log1p(4.0 * theta / 3.0);
+
+  const double log_s_xxx =
+      (-log_64 - log_4theta_term +
+       log_sum_exp(std::array<double, 4>{
+           log_4theta_term, -8.0 * tau1 / 3.0 + log_9, -8.0 * tau2 / 3.0 + log_18,
+           -4.0 * (tau1 + 2 * tau2) / 3.0 + log_54 - log_2theta_term}));
+
+  const double log_s_xxy =
+      (-log_64 - log_4theta_term +
+       log_diff_exp(
+           log_sum_exp(std::array<double, 2>{
+               log_4theta_term,
+               -8.0 * tau1 / 3.0 + log_9,
+           }),
+           log_sum_exp(std::array<double, 2>{
+               -8.0 * tau2 / 3.0 + log_6,
+               -4.0 * (tau1 + 2 * tau2) / 3.0 + log_18 - log_2theta_term})));
+
+  const double log_s_xyx =
+      (-log_64 - log_4theta_term +
+       log_diff_exp(
+           log_sum_exp(std::array<double, 2>{
+               log_4theta_term,
+               -8.0 * tau2 / 3.0 + log_6,
+
+           }),
+           log_sum_exp(std::array<double, 2>{
+               -8.0 * tau1 / 3.0 + log_6,
+               -4.0 * (tau1 + 2 * tau2) / 3.0 + log_18 - log_2theta_term})));
+
+  const double log_s_xyz =
+      (-log_64 - log_4theta_term +
+       log_diff_exp(log_sum_exp(std::array<double, 2>{
+                        log_4theta_term,
+                        -4.0 * (tau1 + 2 * tau2) / 3.0 + log_18 - log_2theta_term,
+                    }),
+                    log_sum_exp(std::array<double, 2>{
+                        -8.0 * tau1 / 3.0 + log_6,
+                        -8.0 * tau2 / 3.0 + log_6,
+                    })));
+
+  return {log_s_xxx, log_s_xxy, log_s_xyx, log_s_xyz};
+}
+
+
+constexpr size_t site_pattern_index(size_t a, size_t b, size_t c) {
+  return a + b * 4 + c * 16;
+}
+
+/**
+ * Compute weights for the three possible rooted triplet topologies for
+ * a specific taxon triplet, based on the JC69 model and site-pattern counts
+ * across all genes.
+ *
+ * The three weights correspond to topologies where a, b, c are the sorted
+ * taxon names:
+ *   result[0] -- (a,b)|c
+ *   result[1] -- (a,c)|b
+ *   result[2] -- (b,c)|a
+ *
+ */
+inline std::array<double, 3> compute_jc69_triplet_weights(
+    const MultiGeneAlignment& alignment, const std::string& taxon_a,
+    const std::string& taxon_b, const std::string& taxon_c, double theta) {
+
+      auto site_patterns = aggregate_site_patterns(alignment, {taxon_a, taxon_b, taxon_c});
+
+      double pxxx = 0.0;
+      for(size_t i = 0; i < 4; ++i) {
+        pxxx += site_patterns.site_pattern[site_pattern_index(i, i, i)];
+      }
+
+      std::array<double, 3> pxxy = {0.0, 0.0, 0.0};
+      for(size_t i = 0; i < 4; ++i) {
+        for(size_t j = 0; j < 4; ++j) {
+          if(i == j) continue;
+          pxxy[0] += site_patterns.site_pattern[site_pattern_index(i, i, j)];
+          pxxy[1] += site_patterns.site_pattern[site_pattern_index(i, j, i)];
+          pxxy[2] += site_patterns.site_pattern[site_pattern_index(j, i, i)];
+        }
+      }
+
+      std::array<double, 3> pxyx = {0.0, 0.0, 0.0};
+      for(size_t i = 0; i < 4; ++i) {
+        for(size_t j = 0; j < 4; ++j) {
+          if(i == j) continue;
+          pxyx[0] += site_patterns.site_pattern[site_pattern_index(i, j, i)] + site_patterns.site_pattern[site_pattern_index(j, i, i)];
+          pxyx[1] += site_patterns.site_pattern[site_pattern_index(i, i, j)] + site_patterns.site_pattern[site_pattern_index(j, i, i)];
+          pxyx[2] += site_patterns.site_pattern[site_pattern_index(i, i, j)] + site_patterns.site_pattern[site_pattern_index(i, j, i)];
+        }
+      }
+
+      double pxyz = 0.0;
+      for(size_t i = 0; i < 4; ++i) {
+        for(size_t j = 0; j < 4; ++j) {
+          for(size_t k = 0; k < 4; ++k) {
+            if(i == j || i == k || j == k) continue;
+            pxyz += site_patterns.site_pattern[site_pattern_index(i, j, k)];
+          }
+        }      
+      }
+
+      // exp((-8/3)*(\tau1)) = (4/3)*(pxxx + 3*pxxy - 2*(pxyx + pxyz))(3 + 4*\theta)
+      //                     = 4*(pxxx + 3*pxxy - 2*(pxyx + pxyz)) * (1 + 4/3*\theta)
+      const double log_4 = log(4.0);
+      const double log_theta_term = log1p(4.0/3.0*theta);
+      std::array<double,3> tau1 = {
+        (-3.0/8.0)*(log_4 + log(pxxx + 3*pxxy[0] - 2*(pxyx[0] + pxyz)) + log_theta_term),
+        (-3.0/8.0)*(log_4 + log(pxxx + 3*pxxy[1] - 2*(pxyx[1] + pxyz)) + log_theta_term),
+        (-3.0/8.0)*(log_4 + log(pxxx + 3*pxxy[2] - 2*(pxyx[2] + pxyz)) + log_theta_term)
+      };
+      // exp((-8/3)*(\tau2)) = (4/3)*(pxxx - pxxy + 2*(pxyx - pxyz)) (3 + 4*\theta)
+      //                    = 4*(pxxx - pxxy + 2*(pxyx - pxyz)) * (1 + 4/3*\theta)
+      std::array<double,3> tau2 = {
+        (-3.0/8.0)*(log_4 + log(pxxx - pxxy[0] + 2*(pxyx[0] - pxyz)) + log_theta_term),
+        (-3.0/8.0)*(log_4 + log(pxxx - pxxy[1] + 2*(pxyx[1] - pxyz)) + log_theta_term),
+        (-3.0/8.0)*(log_4 + log(pxxx - pxxy[2] + 2*(pxyx[2] - pxyz)) + log_theta_term)
+      };
+
+
+      std::array<double, 3> weights = {0.0, 0.0, 0.0};
+      for(size_t i = 0; i < 3; ++i) {
+        auto site_pattern_weights = compute_jc69_site_pattern_weights(tau1[i], tau2[i], theta);
+        weights[i] = site_pattern_weights[0] * pxxx 
+        + site_pattern_weights[1] * pxxy[i] 
+        + site_pattern_weights[2] * pxyx[i] 
+        + site_pattern_weights[3] * pxyz;
+      }
+
+  return weights;
+}
+
 /**
  * STUB: Compute weights for the three possible rooted triplet topologies for
  * a specific taxon triplet, based on site-pattern counts across all genes.
@@ -203,6 +359,84 @@ inline std::array<double, 3> compute_triplet_weights(
   auto ss = std::array<double, 6>{1.0, 1.0, 1.0, 1.0, 1.0, 1.0};  // JC69 model
 
   return {0.0, 0.0, 0.0};
+}
+
+/**
+ * Compute weights for the three possible rooted triplet topologies for
+ * a specific taxon triplet, based on the JC69 model and site-pattern counts
+ * in a single gene.
+ *
+ * The three weights correspond to topologies where a, b, c are the sorted
+ * taxon names:
+ *   result[0] -- (a,b)|c
+ *   result[1] -- (a,c)|b
+ *   result[2] -- (b,c)|a
+ *
+ */
+inline std::array<double, 3> compute_jc69_triplet_weights(
+    const GeneAlignment& gene, const std::string& taxon_a,
+    const std::string& taxon_b, const std::string& taxon_c, double theta) {
+
+      auto site_patterns = site_patterns_for_ktaxa(gene, {taxon_a, taxon_b, taxon_c});
+
+      double pxxx = 0.0;
+      for(size_t i = 0; i < 4; ++i) {
+        pxxx += site_patterns.site_pattern[site_pattern_index(i, i, i)];
+      }
+
+      std::array<double, 3> pxxy = {0.0, 0.0, 0.0};
+      for(size_t i = 0; i < 4; ++i) {
+        for(size_t j = 0; j < 4; ++j) {
+          if(i == j) continue;
+          pxxy[0] += site_patterns.site_pattern[site_pattern_index(i, i, j)];
+          pxxy[1] += site_patterns.site_pattern[site_pattern_index(i, j, i)];
+          pxxy[2] += site_patterns.site_pattern[site_pattern_index(j, i, i)];
+        }
+      }
+
+      std::array<double, 3> pxyx = {0.0, 0.0, 0.0};
+      for(size_t i = 0; i < 4; ++i) {
+        for(size_t j = 0; j < 4; ++j) {
+          if(i == j) continue;
+          pxyx[0] += site_patterns.site_pattern[site_pattern_index(i, j, i)] + site_patterns.site_pattern[site_pattern_index(j, i, i)];
+          pxyx[1] += site_patterns.site_pattern[site_pattern_index(i, i, j)] + site_patterns.site_pattern[site_pattern_index(j, i, i)];
+          pxyx[2] += site_patterns.site_pattern[site_pattern_index(i, i, j)] + site_patterns.site_pattern[site_pattern_index(i, j, i)];
+        }
+      }
+
+      double pxyz = 0.0;
+      for(size_t i = 0; i < 4; ++i) {
+        for(size_t j = 0; j < 4; ++j) {
+          for(size_t k = 0; k < 4; ++k) {
+            if(i == j || i == k || j == k) continue;
+            pxyz += site_patterns.site_pattern[site_pattern_index(i, j, k)];
+          }
+        }
+      }
+
+      const double log_4 = log(4.0);
+      const double log_theta_term = log1p(4.0/3.0*theta);
+      std::array<double,3> tau1 = {
+        (-3.0/8.0)*(log_4 + log(pxxx + 3*pxxy[0] - 2*(pxyx[0] + pxyz)) + log_theta_term),
+        (-3.0/8.0)*(log_4 + log(pxxx + 3*pxxy[1] - 2*(pxyx[1] + pxyz)) + log_theta_term),
+        (-3.0/8.0)*(log_4 + log(pxxx + 3*pxxy[2] - 2*(pxyx[2] + pxyz)) + log_theta_term)
+      };
+      std::array<double,3> tau2 = {
+        (-3.0/8.0)*(log_4 + log(pxxx - pxxy[0] + 2*(pxyx[0] - pxyz)) + log_theta_term),
+        (-3.0/8.0)*(log_4 + log(pxxx - pxxy[1] + 2*(pxyx[1] - pxyz)) + log_theta_term),
+        (-3.0/8.0)*(log_4 + log(pxxx - pxxy[2] + 2*(pxyx[2] - pxyz)) + log_theta_term)
+      };
+
+      std::array<double, 3> weights = {0.0, 0.0, 0.0};
+      for(size_t i = 0; i < 3; ++i) {
+        auto site_pattern_weights = compute_jc69_site_pattern_weights(tau1[i], tau2[i], theta);
+        weights[i] = site_pattern_weights[0] * pxxx
+        + site_pattern_weights[1] * pxxy[i]
+        + site_pattern_weights[2] * pxyx[i]
+        + site_pattern_weights[3] * pxyz;
+      }
+
+  return weights;
 }
 
 /**
