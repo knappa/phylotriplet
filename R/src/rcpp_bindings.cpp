@@ -465,6 +465,53 @@ List site_pattern_rcpp(SEXP aln_ptr, std::vector<std::string> taxa) {
                       Named("site_pattern") = sp);
 }
 
+//' Compute JC69 triplet topology weights (multi-gene, internal)
+//'
+//' @param aln_ptr External pointer from read_nexus_rcpp /
+// read_phylip_files_rcpp
+//' @param taxon1,taxon2,taxon3 Taxon names (any order)
+//' @param theta Population-scaled mutation rate parameter
+//' @return Numeric vector of length 3: weights for the three rooted triplet
+//'   topologies (ab|c, ac|b, bc|a where a,b,c are the sorted taxon names)
+//' @keywords internal
+// [[Rcpp::export]]
+NumericVector compute_jc69_triplet_weights_rcpp(SEXP aln_ptr,
+                                                std::string taxon1,
+                                                std::string taxon2,
+                                                std::string taxon3,
+                                                double theta) {
+  Rcpp::XPtr<MultiGeneAlignment> ptr(aln_ptr);
+  auto w = compute_jc69_triplet_weights(*ptr, taxon1, taxon2, taxon3, theta);
+  NumericVector out(3);
+  out[0] = w[0];
+  out[1] = w[1];
+  out[2] = w[2];
+  return out;
+}
+
+//' Compute JC69 triplet topology weights (single gene, internal)
+//'
+//' @param gene_ptr External pointer from get_gene_rcpp
+//' @param taxon1,taxon2,taxon3 Taxon names (any order)
+//' @param theta Population-scaled mutation rate parameter
+//' @return Numeric vector of length 3: weights for the three rooted triplet
+//'   topologies (ab|c, ac|b, bc|a where a,b,c are the sorted taxon names)
+//' @keywords internal
+// [[Rcpp::export]]
+NumericVector gene_compute_jc69_triplet_weights_rcpp(SEXP gene_ptr,
+                                                     std::string taxon1,
+                                                     std::string taxon2,
+                                                     std::string taxon3,
+                                                     double theta) {
+  Rcpp::XPtr<GeneAlignment> ptr(gene_ptr);
+  auto w = compute_jc69_triplet_weights(*ptr, taxon1, taxon2, taxon3, theta);
+  NumericVector out(3);
+  out[0] = w[0];
+  out[1] = w[1];
+  out[2] = w[2];
+  return out;
+}
+
 //' Compute triplet topology weights for a specific taxon triplet (multi-gene,
 // internal)
 //'

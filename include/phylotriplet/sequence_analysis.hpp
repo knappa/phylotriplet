@@ -344,8 +344,8 @@ inline std::vector<TuplePatterns> compute_aggregate_site_patterns(
 // ---------------------------------------------------------------------------
 
 /**
- * Compute aggregate site-pattern counts for all C(n,3) taxon triplets across
- * all genes.  Equivalent to compute_aggregate_site_patterns().
+ * Compute aggregate site-pattern counts for all n choose 3 taxon triplets
+ * across all genes.  Equivalent to compute_aggregate_site_patterns().
  */
 inline std::vector<TuplePatterns> triplet_site_patterns(
     const MultiGeneAlignment& alignment) {
@@ -364,8 +364,8 @@ inline TuplePatterns triplet_site_pattern(const MultiGeneAlignment& alignment,
 }
 
 /**
- * Compute aggregate site-pattern counts for all C(n,4) taxon quartets across
- * all genes.  Only genes containing all four taxa contribute.
+ * Compute aggregate site-pattern counts for all n choose 4 taxon quartets
+ * across all genes.  Only genes containing all four taxa contribute.
  */
 inline std::vector<TuplePatterns> quartet_site_patterns(
     const MultiGeneAlignment& alignment) {
@@ -430,7 +430,7 @@ inline TuplePatterns site_pattern(const MultiGeneAlignment& alignment,
 // Single-gene overloads (no aggregation, no skipping)
 // ---------------------------------------------------------------------------
 
-/** All C(n,3) triplet site-pattern counts for one gene. */
+/** All n choose 3 triplet site-pattern counts for one gene. */
 inline std::vector<TuplePatterns> triplet_site_patterns(
     const GeneAlignment& gene) {
   std::vector<TuplePatterns> result;
@@ -448,7 +448,7 @@ inline TuplePatterns triplet_site_pattern(const GeneAlignment& gene,
   return site_patterns_for_ktaxa(gene, {taxon_a, taxon_b, taxon_c});
 }
 
-/** All C(n,4) quartet site-pattern counts for one gene. */
+/** All n choose 4 quartet site-pattern counts for one gene. */
 inline std::vector<TuplePatterns> quartet_site_patterns(
     const GeneAlignment& gene) {
   std::vector<TuplePatterns> result;
@@ -473,6 +473,103 @@ inline TuplePatterns quartet_site_pattern(const GeneAlignment& gene,
 inline TuplePatterns site_pattern(const GeneAlignment& gene,
                                   std::vector<std::string> taxa) {
   return site_patterns_for_ktaxa(gene, std::move(taxa));
+}
+
+// -- JC69 triplet weight convenience overloads --------------------------------
+// (These depend on site_patterns_for_ktaxa / aggregate_site_patterns above,
+//  so they live here rather than in triplet_weights.hpp.)
+
+// Permute weights from sorted-taxa order back to caller-supplied order.
+// sorted_weights[i] has outgroup sorted_taxa[2-i].
+inline std::array<double, 3> permute_triplet_weights(
+    const std::array<double, 3>& sorted_weights,
+    const std::vector<std::string>& sorted_taxa, const std::string& taxon_a,
+    const std::string& taxon_b, const std::string& taxon_c) {
+  // Find each caller taxon's position in sorted order.
+  // sorted_taxa has exactly 3 elements; each taxon matches exactly one.
+  size_t pos_a = (taxon_a == sorted_taxa[0])   ? 0
+                 : (taxon_a == sorted_taxa[1]) ? 1
+                                               : 2;
+  size_t pos_b = (taxon_b == sorted_taxa[0])   ? 0
+                 : (taxon_b == sorted_taxa[1]) ? 1
+                                               : 2;
+  size_t pos_c = (taxon_c == sorted_taxa[0])   ? 0
+                 : (taxon_c == sorted_taxa[1]) ? 1
+                                               : 2;
+  // Outgroup at sorted position j -> sorted_weights[2-j]
+  return {sorted_weights[2 - pos_c], sorted_weights[2 - pos_b],
+          sorted_weights[2 - pos_a]};
+}
+
+/**
+ * Compute JC69 triplet weights from a multi-gene alignment.
+ *
+ * Results are in caller-supplied order:
+ *   result[0] -- (taxon_a, taxon_b) | taxon_c
+ *   result[1] -- (taxon_a, taxon_c) | taxon_b
+ *   result[2] -- (taxon_b, taxon_c) | taxon_a
+ */
+inline std::array<double, 3> compute_jc69_triplet_weights(
+    const MultiGeneAlignment& alignment, const std::string& taxon_a,
+    const std::string& taxon_b, const std::string& taxon_c, double theta) {
+  auto site_patterns =
+      aggregate_site_patterns(alignment, {taxon_a, taxon_b, taxon_c});
+  auto sorted_weights = compute_jc69_triplet_weights(site_patterns, theta);
+  const double scale = log_sum_exp(sorted_weights);
+  std::array<double, 3> normalized_weights = {
+      std::exp(sorted_weights[0] - scale), std::exp(sorted_weights[1] - scale),
+      std::exp(sorted_weights[2] - scale)};
+  return permute_triplet_weights(normalized_weights, site_patterns.taxa,
+                                 taxon_a, taxon_b, taxon_c);
+}
+
+/**
+ * Compute JC69 triplet weights from a single gene.
+ *
+ * Results are in caller-supplied order:
+ *   result[0] -- (taxon_a, taxon_b) | taxon_c
+ *   result[1] -- (taxon_a, taxon_c) | taxon_b
+ *   result[2] -- (taxon_b, taxon_c) | taxon_a
+ */
+inline std::array<double, 3> compute_jc69_triplet_weights(
+    const GeneAlignment& gene, const std::string& taxon_a,
+    const std::string& taxon_b, const std::string& taxon_c, double theta) {
+  auto site_patterns =
+      site_patterns_for_ktaxa(gene, {taxon_a, taxon_b, taxon_c});
+  auto sorted_weights = compute_jc69_triplet_weights(site_patterns, theta);
+  const double scale = log_sum_exp(sorted_weights);
+  std::array<double, 3> normalized_weights = {
+      std::exp(sorted_weights[0] - scale), std::exp(sorted_weights[1] - scale),
+      std::exp(sorted_weights[2] - scale)};
+  return permute_triplet_weights(normalized_weights, site_patterns.taxa,
+                                 taxon_a, taxon_b, taxon_c);
+}
+
+/**
+ * STUB: Compute weights for the three possible rooted triplet topologies for
+ * a specific taxon triplet, based on site-pattern counts across all genes.
+ *
+ * Not yet implemented -- always throws std::runtime_error.
+ */
+inline std::array<double, 3> compute_triplet_weights(
+    const MultiGeneAlignment& alignment, const std::string& taxon_a,
+    const std::string& taxon_b, const std::string& taxon_c) {
+  auto pis = alignment.nucleotide_frequencies();
+  auto ss = std::array<double, 6>{1.0, 1.0, 1.0, 1.0, 1.0, 1.0};  // JC69 model
+
+  return {0.0, 0.0, 0.0};
+}
+
+/**
+ * STUB: Compute weights for the three possible rooted triplet topologies for
+ * a specific taxon triplet, based on site-pattern counts in a single gene.
+ *
+ * Not yet implemented -- always throws std::runtime_error.
+ */
+inline std::array<double, 3> compute_triplet_weights(
+    const GeneAlignment& gene, const std::string& taxon_a,
+    const std::string& taxon_b, const std::string& taxon_c) {
+  throw std::runtime_error("compute_triplet_weights: not yet implemented");
 }
 
 }  // namespace phylotriplet

@@ -320,7 +320,7 @@ print.PhylotripletGene <- function(x, ...) {
 
 #' Compute triplet site-pattern counts from an alignment
 #'
-#' Computes aggregate site-pattern counts across all genes for every C(n,3)
+#' Computes aggregate site-pattern counts across all genes for every n choose 3
 #' taxon triplet.  Contributions from a gene are included only for genes that
 #' contain all three taxa; n_total and n_counted are summed accordingly.
 #'
@@ -448,7 +448,7 @@ triplet_site_pattern.PhylotripletGene <- function(alignment, taxon1,
 
 #' Compute quartet site-pattern counts from an alignment
 #'
-#' Computes aggregate site-pattern counts across all genes for every C(n,4)
+#' Computes aggregate site-pattern counts across all genes for every n choose 4
 #' taxon quartet.  Contributions from a gene are included only for genes that
 #' contain all four taxa; n_total and n_counted are summed accordingly.
 #'
@@ -701,6 +701,42 @@ site_pattern.PhylotripletGene <- function(alignment, taxa, ...) {
 #' }
 compute_triplet_weights <- function(alignment, taxon1, taxon2, taxon3, ...) {
   UseMethod("compute_triplet_weights")
+}
+
+#' Compute JC69 triplet topology weights
+#'
+#' Computes likelihood-based weights for the three possible rooted triplet
+#' topologies under the Jukes-Cantor (JC69) substitution model.
+#'
+#' @param alignment A \code{PhylotripletAlignment} or \code{PhylotripletGene}
+#' @param taxon1,taxon2,taxon3 Taxon names (any order)
+#' @param theta Population-scaled mutation rate parameter
+#' @param ... Reserved for future use
+#'
+#' @return Named numeric vector of length 3: weights for topologies
+#'   (ab|c, ac|b, bc|a) where a,b,c are sorted taxon names
+#'
+#' @export
+compute_jc69_triplet_weights <- function(alignment, taxon1, taxon2, taxon3,
+                                         theta, ...) {
+  UseMethod("compute_jc69_triplet_weights")
+}
+
+#' @export
+compute_jc69_triplet_weights.PhylotripletAlignment <- function(alignment,
+                                                               taxon1, taxon2,
+                                                               taxon3, theta,
+                                                               ...) {
+  compute_jc69_triplet_weights_rcpp(alignment$.ptr, taxon1, taxon2, taxon3,
+                                    theta)
+}
+
+#' @export
+compute_jc69_triplet_weights.PhylotripletGene <- function(alignment, taxon1,
+                                                          taxon2, taxon3,
+                                                          theta, ...) {
+  gene_compute_jc69_triplet_weights_rcpp(alignment$.ptr, taxon1, taxon2,
+                                         taxon3, theta)
 }
 
 #' @export

@@ -115,7 +115,7 @@ PYBIND11_MODULE(phylotriplet, m) {
       .def(
           "triplet_site_patterns",
           [](const GeneAlignment& gene) { return triplet_site_patterns(gene); },
-          "All C(n,3) triplet site-pattern counts for this gene.")
+          "All n choose 3 triplet site-pattern counts for this gene.")
       .def(
           "triplet_site_pattern",
           [](const GeneAlignment& gene, const std::string& t1,
@@ -128,7 +128,7 @@ PYBIND11_MODULE(phylotriplet, m) {
       .def(
           "quartet_site_patterns",
           [](const GeneAlignment& gene) { return quartet_site_patterns(gene); },
-          "All C(n,4) quartet site-pattern counts for this gene.")
+          "All n choose 4 quartet site-pattern counts for this gene.")
       .def(
           "quartet_site_pattern",
           [](const GeneAlignment& gene, const std::string& t1,
@@ -149,6 +149,17 @@ PYBIND11_MODULE(phylotriplet, m) {
           "Site-pattern counts for a specific k-tuple of taxa (k >= 2).\n\n"
           "Raises ValueError if any taxon is absent.")
       .def(
+          "compute_jc69_triplet_weights",
+          [](const GeneAlignment& gene, const std::string& t1,
+             const std::string& t2, const std::string& t3, double theta) {
+            return compute_jc69_triplet_weights(gene, t1, t2, t3, theta);
+          },
+          py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
+          py::arg("theta"),
+          "JC69 weights for the three rooted triplet topologies.\n\n"
+          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where a, b, c\n"
+          "are the taxon names.")
+      .def(
           "compute_triplet_weights",
           [](const GeneAlignment& gene, const std::string& t1,
              const std::string& t2, const std::string& t3) {
@@ -157,7 +168,7 @@ PYBIND11_MODULE(phylotriplet, m) {
           py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
           "Weights for the three rooted triplet topologies.\n\n"
           "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where a, b, c\n"
-          "are the taxon names in lexicographic order.\n\n"
+          "are the taxon names.\n\n"
           "Raises RuntimeError: not yet implemented.")
       .def("nucleotide_frequencies", &GeneAlignment::nucleotide_frequencies,
            "Empirical nucleotide frequencies (pi_A, pi_C, pi_G, pi_T).\n\n"
@@ -212,7 +223,7 @@ PYBIND11_MODULE(phylotriplet, m) {
           [](const MultiGeneAlignment& aln) {
             return triplet_site_patterns(aln);
           },
-          "Compute aggregate site-pattern counts for all C(n,3) taxon "
+          "Compute aggregate site-pattern counts for all n choose 3 taxon "
           "triplets across all genes.\n\n"
           "Returns a list of TuplePatterns, one per triplet.  Contributions\n"
           "from a gene are included only if it contains all three taxa;\n"
@@ -237,7 +248,7 @@ PYBIND11_MODULE(phylotriplet, m) {
           [](const MultiGeneAlignment& aln) {
             return quartet_site_patterns(aln);
           },
-          "Compute aggregate site-pattern counts for all C(n,4) taxon "
+          "Compute aggregate site-pattern counts for all n choose 4 taxon "
           "quartets across all genes.\n\n"
           "Returns a list of TuplePatterns, one per quartet.  Only genes\n"
           "that contain all four taxa contribute.")
@@ -274,6 +285,18 @@ PYBIND11_MODULE(phylotriplet, m) {
           "Returns:\n"
           "    TuplePatterns")
       .def(
+          "compute_jc69_triplet_weights",
+          [](const MultiGeneAlignment& aln, const std::string& t1,
+             const std::string& t2, const std::string& t3, double theta) {
+            return compute_jc69_triplet_weights(aln, t1, t2, t3, theta);
+          },
+          py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
+          py::arg("theta"),
+          "JC69 weights for the three rooted triplet topologies.\n\n"
+          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where a, b, c\n"
+          "are the taxon names.  Genes that do not\n"
+          "contain all three taxa are skipped with a warning.")
+      .def(
           "compute_triplet_weights",
           [](const MultiGeneAlignment& aln, const std::string& t1,
              const std::string& t2, const std::string& t3) {
@@ -282,7 +305,7 @@ PYBIND11_MODULE(phylotriplet, m) {
           py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
           "Aggregate weights for the three rooted triplet topologies.\n\n"
           "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where a, b, c\n"
-          "are the taxon names in lexicographic order.  Genes that do not\n"
+          "are the taxon names.  Genes that do not\n"
           "contain all three taxa are skipped with a warning.\n\n"
           "Raises RuntimeError: not yet implemented.")
       .def("nucleotide_frequencies",
@@ -336,7 +359,7 @@ PYBIND11_MODULE(phylotriplet, m) {
         "    filepaths:   List of paths, one per gene\n"
         "    gene_names:  Optional list of gene names; defaults to filename "
         "stems\n"
-        "    interleaved: Applied uniformly to all files\n\n"
+        "    interleaved: Set True for interleaved PHYLIP format\n\n"
         "Returns:\n"
         "    MultiGeneAlignment");
 
