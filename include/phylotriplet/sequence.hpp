@@ -91,6 +91,18 @@ inline uint8_t char_to_nucleotide(char c) {
 inline bool is_gap(uint8_t b) { return b == NUC_GAP; }
 
 /**
+ * Map an unambiguous bitmask to its base index (A=0, C=1, G=2, T=3).
+ * Returns -1 for gap or ambiguous bases.
+ */
+inline int unambiguous_base_index(uint8_t b) {
+  if (b == NUC_A) return 0;
+  if (b == NUC_C) return 1;
+  if (b == NUC_G) return 2;
+  if (b == NUC_T) return 3;
+  return -1;
+}
+
+/**
  * Map a bitmask-encoded nucleotide to its probability distribution over
  * {A=0, C=1, G=2, T=3}.
  *
@@ -121,10 +133,27 @@ struct GeneAlignment {
   std::string gene_name;
   std::vector<Sequence> sequences;
 
+  /**
+   * Per-base counts of invariant sites removed by filter_invariant_sites().
+   * Index 0=A, 1=C, 2=G, 3=T.  Zero until filter_invariant_sites() is called.
+   */
+  std::array<size_t, 4> invariant_counts = {{0, 0, 0, 0}};
+
   size_t num_taxa() const { return sequences.size(); }
+
+  /** Number of (variant) columns stored in sequences. */
   size_t length() const {
     return sequences.empty() ? 0 : sequences[0].bases.size();
   }
+
+  /** Total number of invariant sites that were filtered out. */
+  size_t total_invariant_sites() const {
+    return invariant_counts[0] + invariant_counts[1] + invariant_counts[2] +
+           invariant_counts[3];
+  }
+
+  /** Original alignment length (variant + invariant columns). */
+  size_t original_length() const { return length() + total_invariant_sites(); }
 
   std::vector<std::string> taxon_names() const {
     std::vector<std::string> ns;
@@ -136,6 +165,7 @@ struct GeneAlignment {
   /**
    * Empirical nucleotide frequencies (pi_A, pi_C, pi_G, pi_T).
    * Gaps are excluded; ambiguous bases contribute fractionally.
+   * Includes contributions from filtered invariant sites.
    * Returns {0,0,0,0} for an all-gap or empty alignment.
    */
   NucleotideDistribution nucleotide_frequencies() const {
@@ -149,9 +179,76 @@ struct GeneAlignment {
         total += 1.0;
       }
     }
+    // Each invariant site contributes num_taxa() copies of a single base.
+    const double nt = static_cast<double>(num_taxa());
+    for (size_t b = 0; b < 4; ++b) {
+      freq[b] += static_cast<double>(invariant_counts[b]) * nt;
+      total += static_cast<double>(invariant_counts[b]) * nt;
+    }
     if (total > 0.0)
       for (int i = 0; i < 4; ++i) freq[i] /= total;
     return freq;
+  }
+
+  /**
+   * Remove invariant sites from sequences, storing their counts separately.
+   *
+   * An invariant site is one where every taxon has the same unambiguous base
+   * (no gaps, no ambiguity codes).  After calling, sequences contain only
+   * variant sites; invariant_counts holds per-base counts of removed sites.
+   *
+   * Safe to call multiple times (subsequent calls are no-ops if no invariant
+   * sites remain).
+   */
+  void filter_invariant_sites() {
+    if (sequences.empty()) return;
+    const size_t len = length();
+    const size_t n = num_taxa();
+    if (len == 0) return;
+
+    std::vector<bool> is_variant(len, false);
+
+    for (size_t s = 0; s < len; ++s) {
+      const uint8_t first = sequences[0].bases[s];
+      // Must be unambiguous (single bit set) and not a gap
+      if (is_gap(first) || (first & (first - 1)) != 0) {
+        is_variant[s] = true;
+        continue;
+      }
+      bool invariant = true;
+      for (size_t t = 1; t < n; ++t) {
+        if (sequences[t].bases[s] != first) {
+          invariant = false;
+          break;
+        }
+      }
+      if (invariant) {
+        const size_t base_idx = (first == NUC_A)   ? 0
+                                : (first == NUC_C) ? 1
+                                : (first == NUC_G) ? 2
+                                                   : 3;
+        invariant_counts[base_idx]++;
+      } else {
+        is_variant[s] = true;
+      }
+    }
+
+    // Count variant sites for reserve
+    size_t n_variant = 0;
+    for (size_t s = 0; s < len; ++s)
+      if (is_variant[s]) ++n_variant;
+
+    if (n_variant == len) return;  // nothing to filter
+
+    // Compact sequences to keep only variant columns
+    for (auto& seq : sequences) {
+      std::vector<uint8_t> new_bases;
+      new_bases.reserve(n_variant);
+      for (size_t s = 0; s < len; ++s) {
+        if (is_variant[s]) new_bases.push_back(seq.bases[s]);
+      }
+      seq.bases = std::move(new_bases);
+    }
   }
 };
 

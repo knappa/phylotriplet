@@ -182,8 +182,16 @@ inline double compute_log_likelihood(
 template <typename T, size_t N>
 inline T log_sum_exp(std::array<T, N> values) {
   std::sort(values.begin(), values.end(), std::less<T>());
-  T accum = values[0];
-  for (size_t i = 1; i < N; ++i) {
+  // skip -infinity values to avoid NaN from (-inf) - (-inf)
+  size_t start = 0;
+  while (start < N && values[start] == -std::numeric_limits<T>::infinity()) {
+    ++start;
+  }
+  if (start == N) {
+    return -std::numeric_limits<T>::infinity();
+  }
+  T accum = values[start];
+  for (size_t i = start + 1; i < N; ++i) {
     accum = values[i] + log1p(exp(accum - values[i]));
   }
   return accum;
@@ -198,40 +206,59 @@ double log_diff_exp(double log_a, double log_b) {
   return log_a + log1p(-exp(log_b - log_a));
 }
 
-inline std::array<double, 4> compute_jc69_site_pattern_weights(double tau1,
-                                                               double tau2,
-                                                               double theta) {
+inline std::array<double, 4> compute_jc69_site_pattern_log_probs(double tau1,
+                                                                 double tau2,
+                                                                 double theta) {
+  if (tau1 < 0.0 || tau2 < 0.0 || theta < 0.0) {
+    throw std::invalid_argument(
+        "compute_jc69_site_pattern_weights: tau1, tau2, and theta must be "
+        "non-negative");
+  }
+  if (tau1 > tau2) {
+    throw std::invalid_argument(
+        "compute_jc69_site_pattern_weights: must have tau1 <= tau2 but " +
+        std::to_string(tau1) + " > " + std::to_string(tau2));
+  }
+  if (tau1 == tau2) {
+    // Special case: star-tree topology. All patterns are equally likely, so
+    // weights are just proportional to the number of patterns in each class.
+    return {log(4.0 / 64.0), log(12.0 / 64.0), log(24.0 / 64.0),
+            log(24.0 / 64.0)};
+  }
+
   bool warn = false;
 
   /* log becomes constexpr in C++26? change when that becomes common */
   const double log_2 = log(2.0);
   const double log_3 = log(3.0);
   const double log_6 = log(6.0);
+  const double log_8 = log(8.0);
   const double log_9 = log(9.0);
+  const double log_16 = log(16.0);
   const double log_18 = log(18.0);
   const double log_54 = log(54.0);
   const double log_64 = log(64.0);
 
-  const double log_2theta_term = log1p(2.0 * theta / 3.0);
-  const double log_4theta_term = log1p(4.0 * theta / 3.0);
+  const double log1p_2theta_term = log1p(2.0 * theta / 3.0);
+  const double log1p_4theta_term = log1p(4.0 * theta / 3.0);
 
   const double log_s_xxx =
-      (-log_64 - log_4theta_term +
+      (-log_16 - log1p_4theta_term +
        log_sum_exp(std::array<double, 4>{
-           log_4theta_term, -8.0 * tau1 / 3.0 + log_3,
+           log1p_4theta_term, -8.0 * tau1 / 3.0 + log_3,
            -8.0 * tau2 / 3.0 + log_6,
-           -4.0 * (tau1 + 2 * tau2) / 3.0 + log_6 - log_2theta_term}));
+           -4.0 * (tau1 + 2 * tau2) / 3.0 + log_6 - log1p_2theta_term}));
 
   // log_s_xxy
   const double positive_log_sum_exp_term_s_xxy =
       log_sum_exp(std::array<double, 2>{
-          log_4theta_term,
-          -8.0 * tau1 / 3.0 + log_3,
+          log1p_4theta_term + log_3,
+          -8.0 * tau1 / 3.0 + log_9,
       });
   const double negative_log_sum_exp_term_s_xxy =
       log_sum_exp(std::array<double, 2>{
-          -8.0 * tau2 / 3.0 + log_2,
-          -4.0 * (tau1 + 2 * tau2) / 3.0 + log_2 - log_2theta_term});
+          -8.0 * tau2 / 3.0 + log_6,
+          -4.0 * (tau1 + 2 * tau2) / 3.0 + log_6 - log1p_2theta_term});
 
   // guard against numerical errors
   if (negative_log_sum_exp_term_s_xxy >= positive_log_sum_exp_term_s_xxy) {
@@ -240,7 +267,7 @@ inline std::array<double, 4> compute_jc69_site_pattern_weights(double tau1,
 
   const double log_s_xxy =
       positive_log_sum_exp_term_s_xxy > negative_log_sum_exp_term_s_xxy
-          ? (-log_64 - log_4theta_term +
+          ? (-log_16 - log1p_4theta_term +
              log_diff_exp(positive_log_sum_exp_term_s_xxy,
                           negative_log_sum_exp_term_s_xxy))
           : -std::numeric_limits<double>::max();
@@ -249,12 +276,12 @@ inline std::array<double, 4> compute_jc69_site_pattern_weights(double tau1,
 
   const double positive_log_sum_exp_term_s_xyx =
       log_sum_exp(std::array<double, 2>{
-          log_4theta_term,
+          log1p_4theta_term,
           -8.0 * tau2 / 3.0 + log_2,
       });
   const double negative_log_sum_exp_term_s_xyx = log_sum_exp(
       std::array<double, 2>{-8.0 * tau1 / 3.0, -4.0 * (tau1 + 2 * tau2) / 3.0 +
-                                                   log_2 - log_2theta_term});
+                                                   log_2 - log1p_2theta_term});
 
   // guard against numerical errors
   if (negative_log_sum_exp_term_s_xyx >= positive_log_sum_exp_term_s_xyx) {
@@ -263,7 +290,7 @@ inline std::array<double, 4> compute_jc69_site_pattern_weights(double tau1,
 
   const double log_s_xyx =
       positive_log_sum_exp_term_s_xyx > negative_log_sum_exp_term_s_xyx
-          ? (-log_64 - log_4theta_term +
+          ? (log_3 - log_8 - log1p_4theta_term +
              log_diff_exp(positive_log_sum_exp_term_s_xyx,
                           negative_log_sum_exp_term_s_xyx))
           : -std::numeric_limits<double>::max();
@@ -272,8 +299,8 @@ inline std::array<double, 4> compute_jc69_site_pattern_weights(double tau1,
 
   const double positive_log_sum_exp_term_s_xyz =
       log_sum_exp(std::array<double, 2>{
-          log_4theta_term,
-          -4.0 * (tau1 + 2 * tau2) / 3.0 + log_2 - log_2theta_term,
+          log1p_4theta_term,
+          -4.0 * (tau1 + 2 * tau2) / 3.0 + log_2 - log1p_2theta_term,
       });
   const double negative_log_sum_exp_term_s_xyz =
       log_sum_exp(std::array<double, 2>{
@@ -288,7 +315,7 @@ inline std::array<double, 4> compute_jc69_site_pattern_weights(double tau1,
 
   const double log_s_xyz =
       positive_log_sum_exp_term_s_xyz > negative_log_sum_exp_term_s_xyz
-          ? (-log_64 - log_4theta_term +
+          ? (log_3 - log_8 - log1p_4theta_term +
              log_diff_exp(positive_log_sum_exp_term_s_xyz,
                           negative_log_sum_exp_term_s_xyz))
           : -std::numeric_limits<double>::max();
@@ -315,7 +342,7 @@ constexpr size_t site_pattern_index(size_t a, size_t b, size_t c) {
  *   result[1] -- (a,c)|b
  *   result[2] -- (b,c)|a
  */
-inline std::array<double, 3> compute_jc69_triplet_weights(
+inline std::array<double, 3> compute_jc69_triplet_log_weights(
     const TuplePatterns& site_patterns, double theta) {
   const double n = site_patterns.n_counted;
   if (n == 0.0) {
@@ -327,7 +354,6 @@ inline std::array<double, 3> compute_jc69_triplet_weights(
   for (size_t i = 0; i < 4; ++i) {
     pxxx += site_patterns.site_pattern[site_pattern_index(i, i, i)] / n;
   }
-  pxxx /= 4.0;
 
   std::array<double, 3> pxxy = {0.0, 0.0, 0.0};
   for (size_t i = 0; i < 4; ++i) {
@@ -338,9 +364,6 @@ inline std::array<double, 3> compute_jc69_triplet_weights(
       pxxy[2] += site_patterns.site_pattern[site_pattern_index(j, i, i)] / n;
     }
   }
-  pxxy[0] /= 12.0;
-  pxxy[1] /= 12.0;
-  pxxy[2] /= 12.0;
 
   std::array<double, 3> pxyx = {0.0, 0.0, 0.0};
   for (size_t i = 0; i < 4; ++i) {
@@ -354,9 +377,6 @@ inline std::array<double, 3> compute_jc69_triplet_weights(
                  site_patterns.site_pattern[site_pattern_index(i, j, i)] / n;
     }
   }
-  pxyx[0] /= 24.0;
-  pxyx[1] /= 24.0;
-  pxyx[2] /= 24.0;
 
   double pxyz = 0.0;
   for (size_t i = 0; i < 4; ++i) {
@@ -367,38 +387,43 @@ inline std::array<double, 3> compute_jc69_triplet_weights(
       }
     }
   }
-  pxyz /= 24.0;
 
   // exp((-8/3)*(\tau1))
   //   = (4/3)*(pxxx + 3*pxxy - 2*(pxyx + pxyz))(3 + 4*\theta)
   //   = 4*(pxxx + 3*pxxy - 2*(pxyx + pxyz)) * (1 + 4/3*\theta)
+  const double log_3 = log(3.0);
   const double log_4 = log(4.0);
-  const double log_theta_term = log1p(4.0 / 3.0 * theta);
+  const double log1p_43theta_term = log1p((4.0 / 3.0) * theta);
   std::array<double, 3> tau1 = {
-      (-3.0 / 8.0) * (log_4 + log(pxxx + 3 * pxxy[0] - 2 * (pxyx[0] + pxyz)) +
-                      log_theta_term),
-      (-3.0 / 8.0) * (log_4 + log(pxxx + 3 * pxxy[1] - 2 * (pxyx[1] + pxyz)) +
-                      log_theta_term),
-      (-3.0 / 8.0) * (log_4 + log(pxxx + 3 * pxxy[2] - 2 * (pxyx[2] + pxyz)) +
-                      log_theta_term)};
+      (-3.0 / 8.0) * (log(3 * pxxx + 3 * pxxy[0] - pxyx[0] + pxyz) - log_3 +
+                      log1p_43theta_term),
+      (-3.0 / 8.0) * (log(3 * pxxx + 3 * pxxy[1] - pxyx[1] + pxyz) - log_3 +
+                      log1p_43theta_term),
+      (-3.0 / 8.0) * (log(3 * pxxx + 3 * pxxy[2] - pxyx[2] + pxyz) - log_3 +
+                      log1p_43theta_term)};
   // exp((-8/3)*(\tau2))
   //   = (4/3)*(pxxx - pxxy + 2*(pxyx - pxyz)) (3 + 4*\theta)
   //   = 4*(pxxx - pxxy + 2*(pxyx - pxyz)) * (1 + 4/3*\theta)
   std::array<double, 3> tau2 = {
-      (-3.0 / 8.0) *
-          (log_4 + log(pxxx - pxxy[0] + 2 * (pxyx[0] - pxyz)) + log_theta_term),
-      (-3.0 / 8.0) *
-          (log_4 + log(pxxx - pxxy[1] + 2 * (pxyx[1] - pxyz)) + log_theta_term),
-      (-3.0 / 8.0) * (log_4 + log(pxxx - pxxy[2] + 2 * (pxyx[2] - pxyz)) +
-                      log_theta_term)};
+      (-3.0 / 8.0) * (log(3 * pxxx - pxxy[0] + pxyx[0] - pxyz) - log_3 +
+                      log1p_43theta_term),
+      (-3.0 / 8.0) * (log(3 * pxxx - pxxy[1] + pxyx[1] - pxyz) - log_3 +
+                      log1p_43theta_term),
+      (-3.0 / 8.0) * (log(3 * pxxx - pxxy[2] + pxyx[2] - pxyz) - log_3 +
+                      log1p_43theta_term)};
 
   std::array<double, 3> weights = {0.0, 0.0, 0.0};
   for (size_t i = 0; i < 3; ++i) {
-    auto site_pattern_weights =
-        compute_jc69_site_pattern_weights(tau1[i], tau2[i], theta);
-    weights[i] =
-        site_pattern_weights[0] * pxxx + site_pattern_weights[1] * pxxy[i] +
-        site_pattern_weights[2] * pxyx[i] + site_pattern_weights[3] * pxyz;
+    if (tau1[i] < 0 || tau2[i] < 0 || tau1[i] > tau2[i]) {
+      // zero weight for this topology
+      weights[i] = -std::numeric_limits<double>::infinity();  
+    } else {
+      auto site_pattern_weights =
+          compute_jc69_site_pattern_log_probs(tau1[i], tau2[i], theta);
+      weights[i] =
+          site_pattern_weights[0] * pxxx + site_pattern_weights[1] * pxxy[i] +
+          site_pattern_weights[2] * pxyx[i] + site_pattern_weights[3] * pxyz;
+    }
   }
 
   return weights;

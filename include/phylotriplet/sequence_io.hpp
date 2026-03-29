@@ -289,7 +289,8 @@ inline std::vector<Sequence> parse_matrix_interleaved(
  *  - Nested comments [...]
  */
 inline MultiGeneAlignment read_nexus(std::istream& stream,
-                                     const std::string& source = "<stream>") {
+                                     const std::string& source = "<stream>",
+                                     bool filter_invariant = true) {
   // Read entire content and strip comments
   std::string content((std::istreambuf_iterator<char>(stream)),
                       std::istreambuf_iterator<char>());
@@ -405,6 +406,7 @@ inline MultiGeneAlignment read_nexus(std::istream& stream,
         gene.sequences =
             interleave ? detail::parse_matrix_interleaved(mlines, ntax, nchar)
                        : detail::parse_matrix_sequential(mlines, ntax, nchar);
+        if (filter_invariant) gene.filter_invariant_sites();
         result.genes.push_back(std::move(gene));
 
       } else if (ublock == "SETS") {
@@ -449,6 +451,7 @@ inline MultiGeneAlignment read_nexus(std::istream& stream,
             gene.sequences[t].bases.push_back(full.sequences[t].bases[col]);
         }
       }
+      if (filter_invariant) gene.filter_invariant_sites();
       split.genes.push_back(std::move(gene));
     }
     return split;
@@ -458,10 +461,11 @@ inline MultiGeneAlignment read_nexus(std::istream& stream,
 }
 
 /** Read a NEXUS file by path. */
-inline MultiGeneAlignment read_nexus_file(const std::string& filepath) {
+inline MultiGeneAlignment read_nexus_file(const std::string& filepath,
+                                           bool filter_invariant = true) {
   std::ifstream f(filepath);
   if (!f.is_open()) throw std::runtime_error("Cannot open file: " + filepath);
-  return read_nexus(f, filepath);
+  return read_nexus(f, filepath, filter_invariant);
 }
 
 // -- Public PHYLIP API
@@ -483,7 +487,8 @@ inline MultiGeneAlignment read_nexus_file(const std::string& filepath) {
 inline GeneAlignment read_phylip(std::istream& stream,
                                  const std::string& gene_name = "gene",
                                  bool interleaved = false,
-                                 const std::string& source = "<stream>") {
+                                 const std::string& source = "<stream>",
+                                 bool filter_invariant = true) {
   // Skip blank lines to find the header
   std::string header;
   while (std::getline(stream, header)) {
@@ -572,6 +577,7 @@ inline GeneAlignment read_phylip(std::istream& stream,
     }
   }
 
+  if (filter_invariant) gene.filter_invariant_sites();
   return gene;
 }
 
@@ -579,7 +585,8 @@ inline GeneAlignment read_phylip(std::istream& stream,
  *  gene_name defaults to the filename stem (no extension). */
 inline GeneAlignment read_phylip_file(const std::string& filepath,
                                       const std::string& gene_name = "",
-                                      bool interleaved = false) {
+                                      bool interleaved = false,
+                                      bool filter_invariant = true) {
   std::ifstream f(filepath);
   if (!f.is_open()) throw std::runtime_error("Cannot open file: " + filepath);
 
@@ -590,7 +597,7 @@ inline GeneAlignment read_phylip_file(const std::string& filepath,
     size_t dot = name.find_last_of('.');
     if (dot != std::string::npos) name = name.substr(0, dot);
   }
-  return read_phylip(f, name, interleaved, filepath);
+  return read_phylip(f, name, interleaved, filepath, filter_invariant);
 }
 
 /**
@@ -602,12 +609,14 @@ inline GeneAlignment read_phylip_file(const std::string& filepath,
  */
 inline MultiGeneAlignment read_phylip_files(
     const std::vector<std::string>& filepaths,
-    const std::vector<std::string>& gene_names = {}, bool interleaved = false) {
+    const std::vector<std::string>& gene_names = {}, bool interleaved = false,
+    bool filter_invariant = true) {
   MultiGeneAlignment result;
   result.genes.reserve(filepaths.size());
   for (size_t i = 0; i < filepaths.size(); ++i) {
     const std::string& name = (i < gene_names.size()) ? gene_names[i] : "";
-    result.genes.push_back(read_phylip_file(filepaths[i], name, interleaved));
+    result.genes.push_back(
+        read_phylip_file(filepaths[i], name, interleaved, filter_invariant));
   }
   return result;
 }
