@@ -1,0 +1,15 @@
+Third-Party Software Notices
+============================
+
+This project includes the following third-party software:
+
+LBFGSpp (LBFGS++)
+-----------------
+  Location:  third_party/LBFGSpp/
+  License:   MIT
+  Copyright: (C) 2020-2026 Yixuan Qiu <yixuan.qiu@cos.name>
+  Source:    https://github.com/yixuan/LBFGSpp
+  Purpose:   Header-only C++ library for L-BFGS and L-BFGS-B optimization,
+             used for maximum-likelihood estimation of triplet weights.
+
+  See third_party/LBFGSpp/LICENSE for the full license text.
