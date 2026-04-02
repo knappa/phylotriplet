@@ -24,36 +24,20 @@ namespace detail {
  */
 inline void accumulate_ktuple(std::vector<double>& site_pattern,
                               const std::vector<NucleotideDistribution>& dists,
-                              size_t pos, size_t idx, double weight) {
+                              size_t pos,
+                              size_t idx,
+                              double weight) {
   if (pos == dists.size()) {
     site_pattern[idx] += weight;
     return;
   }
   for (int b = 0; b < 4; ++b) {
     if (dists[pos][b] > 0.0)
-      accumulate_ktuple(site_pattern, dists, pos + 1, idx * 4 + b,
-                        weight * dists[pos][b]);
+      accumulate_ktuple(
+          site_pattern, dists, pos + 1, idx * 4 + b, weight * dists[pos][b]);
   }
 }
 
-/**
- * Add invariant-site contributions to a TuplePatterns object.
- *
- * For each base b in {A,C,G,T}, an invariant site (all taxa show b) maps
- * to the diagonal pattern index b * (4^k - 1) / 3.
- */
-inline void add_invariant_contributions(
-    TuplePatterns& pats, const std::array<size_t, 4>& invariant_counts) {
-  const size_t k = pats.order();
-  const size_t stride = (pow4_rt(k) - 1) / 3;
-  for (size_t b = 0; b < 4; ++b) {
-    if (invariant_counts[b] > 0) {
-      const double count = static_cast<double>(invariant_counts[b]);
-      pats.site_pattern[b * stride] += count;
-      pats.n_counted += count;
-    }
-  }
-}
 }  // namespace detail
 
 /**
@@ -72,7 +56,8 @@ void for_each_site_pattern(const GeneAlignment& gene, Visitor&& visit) {
   const size_t n = gene.num_taxa();
   const size_t len = gene.length();
 
-  if (n < 3) return;
+  if (n < 3)
+    return;
 
   // Build a sorted index so taxa come out in lexicographic order.
   std::vector<size_t> order(n);
@@ -81,47 +66,80 @@ void for_each_site_pattern(const GeneAlignment& gene, Visitor&& visit) {
     return gene.sequences[a].taxon < gene.sequences[b].taxon;
   });
 
+  const bool use_compressed = !gene.compressed.empty();
+
   for (size_t p = 0; p < n; ++p) {
     for (size_t q = p + 1; q < n; ++q) {
       for (size_t r = q + 1; r < n; ++r) {
         const size_t ip = order[p], iq = order[q], ir = order[r];
 
-        TuplePatterns pats({gene.sequences[ip].taxon, gene.sequences[iq].taxon,
+        TuplePatterns pats({gene.sequences[ip].taxon,
+                            gene.sequences[iq].taxon,
                             gene.sequences[ir].taxon});
-        pats.n_total = static_cast<double>(gene.original_length());
+        pats.n_total = static_cast<double>(gene.length());
 
-        const std::vector<uint8_t>& sp = gene.sequences[ip].bases;
-        const std::vector<uint8_t>& sq = gene.sequences[iq].bases;
-        const std::vector<uint8_t>& sr = gene.sequences[ir].bases;
+        if (use_compressed) {
+          const auto& cs = gene.compressed;
+          for (size_t u = 0; u < cs.n_patterns; ++u) {
+            const uint8_t bp = cs.base(u, ip);
+            const uint8_t bq = cs.base(u, iq);
+            const uint8_t br = cs.base(u, ir);
 
-        for (size_t s = 0; s < len; ++s) {
-          const uint8_t bp = sp[s], bq = sq[s], br = sr[s];
+            if (!cs.all_defined[u] && (is_gap(bp) || is_gap(bq) || is_gap(br)))
+              continue;
 
-          if (is_gap(bp) || is_gap(bq) || is_gap(br)) continue;
+            const double w = cs.weights[u];
+            pats.n_counted += w;
 
-          pats.n_counted += 1.0;
-
-          // Fast path: unambiguous bases (single bit set) need only one update.
-          const int ip2 = unambiguous_base_index(bp);
-          const int iq2 = unambiguous_base_index(bq);
-          const int ir2 = unambiguous_base_index(br);
-          if (ip2 >= 0 && iq2 >= 0 && ir2 >= 0) {
-            pats.site_pattern[ip2 * 16 + iq2 * 4 + ir2] += 1.0;
-            continue;
+            const int i2 = unambiguous_base_index(bp);
+            const int j2 = unambiguous_base_index(bq);
+            const int k2 = unambiguous_base_index(br);
+            if (i2 >= 0 && j2 >= 0 && k2 >= 0) {
+              pats.site_pattern[i2 * 16 + j2 * 4 + k2] += w;
+            } else {
+              const NucleotideDistribution dp = nucleotide_distribution(bp);
+              const NucleotideDistribution dq = nucleotide_distribution(bq);
+              const NucleotideDistribution dr = nucleotide_distribution(br);
+              for (int i = 0; i < 4; ++i)
+                for (int j = 0; j < 4; ++j)
+                  for (int k = 0; k < 4; ++k)
+                    pats.site_pattern[i * 16 + j * 4 + k] +=
+                        dp[i] * dq[j] * dr[k] * w;
+            }
           }
+        } else {
+          const std::vector<uint8_t>& sp = gene.sequences[ip].bases;
+          const std::vector<uint8_t>& sq = gene.sequences[iq].bases;
+          const std::vector<uint8_t>& sr = gene.sequences[ir].bases;
 
-          // Slow path: ambiguous bases contribute fractionally.
-          const NucleotideDistribution dp = nucleotide_distribution(bp);
-          const NucleotideDistribution dq = nucleotide_distribution(bq);
-          const NucleotideDistribution dr = nucleotide_distribution(br);
+          for (size_t s = 0; s < len; ++s) {
+            const uint8_t bp = sp[s], bq = sq[s], br = sr[s];
 
-          for (int i = 0; i < 4; ++i)
-            for (int j = 0; j < 4; ++j)
-              for (int k = 0; k < 4; ++k)
-                pats.site_pattern[i * 16 + j * 4 + k] += dp[i] * dq[j] * dr[k];
+            if (is_gap(bp) || is_gap(bq) || is_gap(br))
+              continue;
+
+            pats.n_counted += 1.0;
+
+            const int i2 = unambiguous_base_index(bp);
+            const int j2 = unambiguous_base_index(bq);
+            const int k2 = unambiguous_base_index(br);
+            if (i2 >= 0 && j2 >= 0 && k2 >= 0) {
+              pats.site_pattern[i2 * 16 + j2 * 4 + k2] += 1.0;
+              continue;
+            }
+
+            const NucleotideDistribution dp = nucleotide_distribution(bp);
+            const NucleotideDistribution dq = nucleotide_distribution(bq);
+            const NucleotideDistribution dr = nucleotide_distribution(br);
+
+            for (int i = 0; i < 4; ++i)
+              for (int j = 0; j < 4; ++j)
+                for (int k = 0; k < 4; ++k)
+                  pats.site_pattern[i * 16 + j * 4 + k] +=
+                      dp[i] * dq[j] * dr[k];
+          }
         }
 
-        detail::add_invariant_contributions(pats, gene.invariant_counts);
         visit(std::move(pats));
       }
     }
@@ -137,14 +155,16 @@ void for_each_site_pattern(const GeneAlignment& gene, Visitor&& visit) {
  * When k=1, site_pattern[i] is the ACGT base count for taxon i.
  */
 template <typename Visitor>
-void for_each_ktuple_pattern(const GeneAlignment& gene, size_t k,
+void for_each_ktuple_pattern(const GeneAlignment& gene,
+                             size_t k,
                              Visitor&& visit) {
   if (k < 1)
     throw std::invalid_argument("for_each_ktuple_pattern: k must be >= 1");
 
   const size_t n = gene.num_taxa();
   const size_t len = gene.length();
-  if (n < k) return;
+  if (n < k)
+    return;
 
   // Build a sorted index so taxa come out in lexicographic order.
   std::vector<size_t> order(n);
@@ -155,61 +175,114 @@ void for_each_ktuple_pattern(const GeneAlignment& gene, size_t k,
 
   // Iterate over all (n choose k) combinations using an index vector.
   std::vector<size_t> combo(k);
-  for (size_t i = 0; i < k; ++i) combo[i] = i;
+  for (size_t i = 0; i < k; ++i)
+    combo[i] = i;
+
+  const bool use_compressed = !gene.compressed.empty();
 
   while (true) {
     std::vector<std::string> taxa(k);
-    std::vector<const std::vector<uint8_t>*> seqs(k);
+    std::vector<size_t> seq_indices(k);
     for (size_t t = 0; t < k; ++t) {
-      const size_t idx = order[combo[t]];
-      taxa[t] = gene.sequences[idx].taxon;
-      seqs[t] = &gene.sequences[idx].bases;
+      seq_indices[t] = order[combo[t]];
+      taxa[t] = gene.sequences[seq_indices[t]].taxon;
     }
 
     TuplePatterns pats(std::move(taxa));
-    pats.n_total = static_cast<double>(gene.original_length());
+    pats.n_total = static_cast<double>(gene.length());
 
     std::vector<NucleotideDistribution> dists(k);
 
-    for (size_t s = 0; s < len; ++s) {
-      bool any_gap = false;
-      bool all_unambiguous = true;
-      size_t flat_idx = 0;
-      for (size_t t = 0; t < k; ++t) {
-        const uint8_t b = (*seqs[t])[s];
-        if (is_gap(b)) {
-          any_gap = true;
-          break;
+    if (use_compressed) {
+      const auto& cs = gene.compressed;
+      for (size_t u = 0; u < cs.n_patterns; ++u) {
+        bool any_gap = false;
+        bool all_unambiguous = true;
+        size_t flat_idx = 0;
+        if (!cs.all_defined[u]) {
+          for (size_t t = 0; t < k; ++t) {
+            if (is_gap(cs.base(u, seq_indices[t]))) {
+              any_gap = true;
+              break;
+            }
+          }
+          if (any_gap)
+            continue;
         }
-        const int bi = unambiguous_base_index(b);
-        if (bi >= 0) {
-          flat_idx = flat_idx * 4 + static_cast<size_t>(bi);
+
+        for (size_t t = 0; t < k; ++t) {
+          const uint8_t b = cs.base(u, seq_indices[t]);
+          const int bi = unambiguous_base_index(b);
+          if (bi >= 0) {
+            flat_idx = flat_idx * 4 + static_cast<size_t>(bi);
+          } else {
+            all_unambiguous = false;
+            dists[t] = nucleotide_distribution(b);
+          }
+        }
+
+        const double w = cs.weights[u];
+        pats.n_counted += w;
+
+        if (all_unambiguous) {
+          pats.site_pattern[flat_idx] += w;
         } else {
-          all_unambiguous = false;
-          dists[t] = nucleotide_distribution(b);
+          for (size_t t = 0; t < k; ++t) {
+            const int bi = unambiguous_base_index(cs.base(u, seq_indices[t]));
+            if (bi >= 0)
+              dists[t] = nucleotide_distribution(cs.base(u, seq_indices[t]));
+          }
+          detail::accumulate_ktuple(pats.site_pattern, dists, 0, 0, w);
         }
       }
-      if (any_gap) continue;
-      pats.n_counted += 1.0;
+    } else {
+      std::vector<const std::vector<uint8_t>*> seqs(k);
+      for (size_t t = 0; t < k; ++t)
+        seqs[t] = &gene.sequences[seq_indices[t]].bases;
 
-      if (all_unambiguous) {
-        pats.site_pattern[flat_idx] += 1.0;
-      } else {
+      for (size_t s = 0; s < len; ++s) {
+        bool any_gap = false;
+        bool all_unambiguous = true;
+        size_t flat_idx = 0;
         for (size_t t = 0; t < k; ++t) {
-          const int bi = unambiguous_base_index((*seqs[t])[s]);
-          if (bi >= 0) dists[t] = nucleotide_distribution((*seqs[t])[s]);
+          const uint8_t b = (*seqs[t])[s];
+          if (is_gap(b)) {
+            any_gap = true;
+            break;
+          }
+          const int bi = unambiguous_base_index(b);
+          if (bi >= 0) {
+            flat_idx = flat_idx * 4 + static_cast<size_t>(bi);
+          } else {
+            all_unambiguous = false;
+            dists[t] = nucleotide_distribution(b);
+          }
         }
-        detail::accumulate_ktuple(pats.site_pattern, dists, 0, 0, 1.0);
+        if (any_gap)
+          continue;
+        pats.n_counted += 1.0;
+
+        if (all_unambiguous) {
+          pats.site_pattern[flat_idx] += 1.0;
+        } else {
+          for (size_t t = 0; t < k; ++t) {
+            const int bi = unambiguous_base_index((*seqs[t])[s]);
+            if (bi >= 0)
+              dists[t] = nucleotide_distribution((*seqs[t])[s]);
+          }
+          detail::accumulate_ktuple(pats.site_pattern, dists, 0, 0, 1.0);
+        }
       }
     }
 
-    detail::add_invariant_contributions(pats, gene.invariant_counts);
     visit(std::move(pats));
 
     // Advance to next combination in lexicographic order.
     int pos = static_cast<int>(k) - 1;
-    while (pos >= 0 && combo[pos] == n - k + static_cast<size_t>(pos)) --pos;
-    if (pos < 0) break;
+    while (pos >= 0 && combo[pos] == n - k + static_cast<size_t>(pos))
+      --pos;
+    if (pos < 0)
+      break;
     ++combo[pos];
     for (size_t i = static_cast<size_t>(pos) + 1; i < k; ++i)
       combo[i] = combo[i - 1] + 1;
@@ -236,57 +309,106 @@ inline TuplePatterns site_patterns_for_ktaxa(const GeneAlignment& gene,
           "site_patterns_for_ktaxa: duplicate taxon names");
 
   const size_t k = taxa.size();
-  std::vector<const std::vector<uint8_t>*> seqs(k, nullptr);
-  for (const auto& seq : gene.sequences)
+
+  // Find the sequence index for each taxon.
+  std::vector<size_t> seq_idx(k, SIZE_MAX);
+  for (size_t i = 0; i < gene.sequences.size(); ++i)
     for (size_t t = 0; t < k; ++t)
-      if (seq.taxon == taxa[t]) seqs[t] = &seq.bases;
+      if (gene.sequences[i].taxon == taxa[t])
+        seq_idx[t] = i;
 
   for (size_t t = 0; t < k; ++t)
-    if (seqs[t] == nullptr)
+    if (seq_idx[t] == SIZE_MAX)
       throw std::invalid_argument("site_patterns_for_ktaxa: taxon '" + taxa[t] +
                                   "' not found in alignment '" +
                                   gene.gene_name + "'");
 
   TuplePatterns pats(taxa);
-  const size_t len = gene.length();
-  pats.n_total = static_cast<double>(gene.original_length());
+  pats.n_total = static_cast<double>(gene.length());
 
   std::vector<NucleotideDistribution> dists(k);
 
-  for (size_t s = 0; s < len; ++s) {
-    bool any_gap = false;
-    bool all_unambiguous = true;
-    size_t flat_idx = 0;
-    for (size_t t = 0; t < k; ++t) {
-      const uint8_t b = (*seqs[t])[s];
-      if (is_gap(b)) {
-        any_gap = true;
-        break;
+  if (!gene.compressed.empty()) {
+    const auto& cs = gene.compressed;
+    for (size_t u = 0; u < cs.n_patterns; ++u) {
+      bool any_gap = false;
+      bool all_unambiguous = true;
+      size_t flat_idx = 0;
+
+      if (!cs.all_defined[u]) {
+        for (size_t t = 0; t < k; ++t) {
+          if (is_gap(cs.base(u, seq_idx[t]))) {
+            any_gap = true;
+            break;
+          }
+        }
+        if (any_gap)
+          continue;
       }
-      const int bi = unambiguous_base_index(b);
-      if (bi >= 0) {
-        flat_idx = flat_idx * 4 + static_cast<size_t>(bi);
+
+      for (size_t t = 0; t < k; ++t) {
+        const uint8_t b = cs.base(u, seq_idx[t]);
+        const int bi = unambiguous_base_index(b);
+        if (bi >= 0) {
+          flat_idx = flat_idx * 4 + static_cast<size_t>(bi);
+        } else {
+          all_unambiguous = false;
+          dists[t] = nucleotide_distribution(b);
+        }
+      }
+
+      const double w = cs.weights[u];
+      pats.n_counted += w;
+
+      if (all_unambiguous) {
+        pats.site_pattern[flat_idx] += w;
       } else {
-        all_unambiguous = false;
-        dists[t] = nucleotide_distribution(b);
+        for (size_t t = 0; t < k; ++t) {
+          const int bi = unambiguous_base_index(cs.base(u, seq_idx[t]));
+          if (bi >= 0)
+            dists[t] = nucleotide_distribution(cs.base(u, seq_idx[t]));
+        }
+        detail::accumulate_ktuple(pats.site_pattern, dists, 0, 0, w);
       }
     }
-    if (any_gap) continue;
-    pats.n_counted += 1.0;
-
-    if (all_unambiguous) {
-      pats.site_pattern[flat_idx] += 1.0;
-    } else {
-      // Fill in remaining dists for any unambiguous bases we skipped above.
+  } else {
+    const size_t len = gene.length();
+    for (size_t s = 0; s < len; ++s) {
+      bool any_gap = false;
+      bool all_unambiguous = true;
+      size_t flat_idx = 0;
       for (size_t t = 0; t < k; ++t) {
-        const int bi = unambiguous_base_index((*seqs[t])[s]);
-        if (bi >= 0) dists[t] = nucleotide_distribution((*seqs[t])[s]);
+        const uint8_t b = gene.sequences[seq_idx[t]].bases[s];
+        if (is_gap(b)) {
+          any_gap = true;
+          break;
+        }
+        const int bi = unambiguous_base_index(b);
+        if (bi >= 0) {
+          flat_idx = flat_idx * 4 + static_cast<size_t>(bi);
+        } else {
+          all_unambiguous = false;
+          dists[t] = nucleotide_distribution(b);
+        }
       }
-      detail::accumulate_ktuple(pats.site_pattern, dists, 0, 0, 1.0);
+      if (any_gap)
+        continue;
+      pats.n_counted += 1.0;
+
+      if (all_unambiguous) {
+        pats.site_pattern[flat_idx] += 1.0;
+      } else {
+        for (size_t t = 0; t < k; ++t) {
+          const uint8_t b = gene.sequences[seq_idx[t]].bases[s];
+          const int bi = unambiguous_base_index(b);
+          if (bi >= 0)
+            dists[t] = nucleotide_distribution(b);
+        }
+        detail::accumulate_ktuple(pats.site_pattern, dists, 0, 0, 1.0);
+      }
     }
   }
 
-  detail::add_invariant_contributions(pats, gene.invariant_counts);
   return pats;
 }
 
@@ -298,7 +420,8 @@ inline TuplePatterns site_patterns_for_ktaxa(const GeneAlignment& gene,
  * from every gene.
  */
 inline TuplePatterns aggregate_site_patterns(
-    const MultiGeneAlignment& alignment, std::vector<std::string> taxa) {
+    const MultiGeneAlignment& alignment,
+    std::vector<std::string> taxa) {
   std::sort(taxa.begin(), taxa.end());
   if (taxa.size() < 1)
     throw std::invalid_argument(
@@ -402,7 +525,8 @@ inline std::vector<TuplePatterns> compute_aggregate_site_patterns(
 
   std::vector<TuplePatterns> result;
   result.reserve(acc.size());
-  for (auto& kv : acc) result.push_back(std::move(kv.second));
+  for (auto& kv : acc)
+    result.push_back(std::move(kv.second));
   return result;
 }
 
@@ -466,7 +590,8 @@ inline std::vector<TuplePatterns> quartet_site_patterns(
 
   std::vector<TuplePatterns> result;
   result.reserve(acc.size());
-  for (auto& kv : acc) result.push_back(std::move(kv.second));
+  for (auto& kv : acc)
+    result.push_back(std::move(kv.second));
   return result;
 }
 
@@ -550,8 +675,10 @@ inline TuplePatterns site_pattern(const GeneAlignment& gene,
 // sorted_weights[i] has outgroup sorted_taxa[2-i].
 inline std::array<double, 3> permute_triplet_weights(
     const std::array<double, 3>& sorted_weights,
-    const std::vector<std::string>& sorted_taxa, const std::string& taxon_a,
-    const std::string& taxon_b, const std::string& taxon_c) {
+    const std::vector<std::string>& sorted_taxa,
+    const std::string& taxon_a,
+    const std::string& taxon_b,
+    const std::string& taxon_c) {
   // Find each caller taxon's position in sorted order.
   // sorted_taxa has exactly 3 elements; each taxon matches exactly one.
   size_t pos_a = (taxon_a == sorted_taxa[0])   ? 0
@@ -564,7 +691,8 @@ inline std::array<double, 3> permute_triplet_weights(
                  : (taxon_c == sorted_taxa[1]) ? 1
                                                : 2;
   // Outgroup at sorted position j -> sorted_weights[2-j]
-  return {sorted_weights[2 - pos_c], sorted_weights[2 - pos_b],
+  return {sorted_weights[2 - pos_c],
+          sorted_weights[2 - pos_b],
           sorted_weights[2 - pos_a]};
 }
 
@@ -577,18 +705,22 @@ inline std::array<double, 3> permute_triplet_weights(
  *   result[2] -- (taxon_b, taxon_c) | taxon_a
  */
 inline std::array<double, 3> compute_jc69_triplet_weights(
-    const MultiGeneAlignment& alignment, const std::string& taxon_a,
-    const std::string& taxon_b, const std::string& taxon_c, double theta) {
+    const MultiGeneAlignment& alignment,
+    const std::string& taxon_a,
+    const std::string& taxon_b,
+    const std::string& taxon_c,
+    double theta) {
   auto site_patterns =
       aggregate_site_patterns(alignment, {taxon_a, taxon_b, taxon_c});
-  auto sorted_log_weights = compute_jc69_triplet_log_weights(site_patterns, theta);
-  const double scale = log_sum_exp(sorted_log_weights);
-  for (double& w : sorted_log_weights) w -= scale;
+  auto sorted_log_weights = compute_jc69_triplet_weights(site_patterns, theta);
+  // const double scale = log_sum_exp(sorted_log_weights);
+  // for (double& w : sorted_log_weights)
+  //   w -= scale;
   std::array<double, 3> sorted_weights = {std::exp(sorted_log_weights[0]),
                                           std::exp(sorted_log_weights[1]),
                                           std::exp(sorted_log_weights[2])};
-  return permute_triplet_weights(sorted_weights, site_patterns.taxa,
-                                 taxon_a, taxon_b, taxon_c);
+  return permute_triplet_weights(
+      sorted_weights, site_patterns.taxa, taxon_a, taxon_b, taxon_c);
 }
 
 /**
@@ -600,23 +732,26 @@ inline std::array<double, 3> compute_jc69_triplet_weights(
  *   result[2] -- (taxon_b, taxon_c) | taxon_a
  */
 inline std::array<double, 3> compute_jc69_triplet_weights(
-    const GeneAlignment& gene, const std::string& taxon_a,
-    const std::string& taxon_b, const std::string& taxon_c, double theta) {
+    const GeneAlignment& gene,
+    const std::string& taxon_a,
+    const std::string& taxon_b,
+    const std::string& taxon_c,
+    double theta) {
   auto site_patterns =
       site_patterns_for_ktaxa(gene, {taxon_a, taxon_b, taxon_c});
-  auto sorted_log_weights =
-      compute_jc69_triplet_log_weights(site_patterns, theta);
+  auto sorted_log_weights = compute_jc69_triplet_weights(site_patterns, theta);
   const double scale = log_sum_exp(sorted_log_weights);
   if (scale == -std::numeric_limits<double>::infinity()) {
     // All triplets are rejected.
-    return {0.0,0.0,0.0};
-  } 
-  for (double& w : sorted_log_weights) w -= scale;
+    return {0.0, 0.0, 0.0};
+  }
+  // for (double& w : sorted_log_weights)
+  //   w -= scale;
   std::array<double, 3> sorted_weights = {std::exp(sorted_log_weights[0]),
                                           std::exp(sorted_log_weights[1]),
                                           std::exp(sorted_log_weights[2])};
-  return permute_triplet_weights(sorted_weights, site_patterns.taxa, taxon_a,
-                                 taxon_b, taxon_c);
+  return permute_triplet_weights(
+      sorted_weights, site_patterns.taxa, taxon_a, taxon_b, taxon_c);
 }
 
 /**
@@ -626,8 +761,10 @@ inline std::array<double, 3> compute_jc69_triplet_weights(
  * Not yet implemented -- always throws std::runtime_error.
  */
 inline std::array<double, 3> compute_triplet_weights(
-    const MultiGeneAlignment& alignment, const std::string& taxon_a,
-    const std::string& taxon_b, const std::string& taxon_c) {
+    const MultiGeneAlignment& alignment,
+    const std::string& taxon_a,
+    const std::string& taxon_b,
+    const std::string& taxon_c) {
   auto pis = alignment.nucleotide_frequencies();
   auto ss = std::array<double, 6>{1.0, 1.0, 1.0, 1.0, 1.0, 1.0};  // JC69 model
 
@@ -641,8 +778,10 @@ inline std::array<double, 3> compute_triplet_weights(
  * Not yet implemented -- always throws std::runtime_error.
  */
 inline std::array<double, 3> compute_triplet_weights(
-    const GeneAlignment& gene, const std::string& taxon_a,
-    const std::string& taxon_b, const std::string& taxon_c) {
+    const GeneAlignment& gene,
+    const std::string& taxon_a,
+    const std::string& taxon_b,
+    const std::string& taxon_c) {
   throw std::runtime_error("compute_triplet_weights: not yet implemented");
 }
 

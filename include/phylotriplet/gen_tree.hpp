@@ -96,7 +96,8 @@ inline void gen_tree_recursive(const std::vector<WeightedTriplet>& triplets,
       TreeNode* subnode = node->add_child();
       if (comp_triplets.empty()) {
         // No triplets constrain this component: emit a multifurcation.
-        for (const auto& m : comp) subnode->add_child(m);
+        for (const auto& m : comp)
+          subnode->add_child(m);
       } else {
         gen_tree_recursive(comp_triplets, subnode);
       }

@@ -32,6 +32,33 @@ static double total_pattern_mass(const TuplePatterns& pats) {
   return t;
 }
 
+// --- unambiguous_base_index --------------------------------------------------
+
+TEST_CASE("unambiguous_base_index: A=0, C=1, G=2, T=3") {
+  REQUIRE(unambiguous_base_index(NUC_A) == 0);
+  REQUIRE(unambiguous_base_index(NUC_C) == 1);
+  REQUIRE(unambiguous_base_index(NUC_G) == 2);
+  REQUIRE(unambiguous_base_index(NUC_T) == 3);
+}
+
+TEST_CASE("unambiguous_base_index: gap returns -1") {
+  REQUIRE(unambiguous_base_index(NUC_GAP) == -1);
+}
+
+TEST_CASE("unambiguous_base_index: ambiguous codes return -1") {
+  REQUIRE(unambiguous_base_index(NUC_R) == -1);
+  REQUIRE(unambiguous_base_index(NUC_Y) == -1);
+  REQUIRE(unambiguous_base_index(NUC_S) == -1);
+  REQUIRE(unambiguous_base_index(NUC_W) == -1);
+  REQUIRE(unambiguous_base_index(NUC_K) == -1);
+  REQUIRE(unambiguous_base_index(NUC_M) == -1);
+  REQUIRE(unambiguous_base_index(NUC_B) == -1);
+  REQUIRE(unambiguous_base_index(NUC_D) == -1);
+  REQUIRE(unambiguous_base_index(NUC_H) == -1);
+  REQUIRE(unambiguous_base_index(NUC_V) == -1);
+  REQUIRE(unambiguous_base_index(NUC_N) == -1);
+}
+
 // --- char_to_nucleotide ------------------------------------------------------
 
 TEST_CASE("char_to_nucleotide: unambiguous bases (upper and lower case)") {
@@ -415,6 +442,257 @@ TEST_CASE("read_nexus: all_taxon_names returns sorted union") {
   REQUIRE(names[0] == "Ant");
   REQUIRE(names[1] == "Bear");
   REQUIRE(names[2] == "Zebra");
+}
+
+// --- compress_sites ----------------------------------------------------------
+
+TEST_CASE("compress_sites: identical columns are collapsed") {
+  // 3 taxa, 4 sites: columns 0,2 are (A,A,A); columns 1,3 are (C,G,T)
+  GeneAlignment gene = make_gene({{"A", "ACAC"}, {"B", "AGAG"}, {"C", "ATAT"}});
+  gene.compress_sites();
+
+  REQUIRE_FALSE(gene.compressed.empty());
+  REQUIRE(gene.compressed.n_taxa == 3);
+  // (A,A,A) x2, (C,G,T) x2 -> 2 unique patterns
+  REQUIRE(gene.compressed.n_patterns == 2);
+
+  // Weights should sum to original length
+  double total_weight = 0.0;
+  for (double w : gene.compressed.weights) total_weight += w;
+  REQUIRE(total_weight == Approx(4.0));
+}
+
+TEST_CASE("compress_sites: all identical columns yield one pattern") {
+  GeneAlignment gene = make_gene({{"A", "AAAA"}, {"B", "CCCC"}, {"C", "GGGG"}});
+  gene.compress_sites();
+
+  REQUIRE(gene.compressed.n_patterns == 1);
+  REQUIRE(gene.compressed.weights[0] == Approx(4.0));
+}
+
+TEST_CASE("compress_sites: all distinct columns are preserved") {
+  GeneAlignment gene = make_gene({{"A", "ACGT"}, {"B", "ACGT"}, {"C", "ACGT"}});
+  gene.compress_sites();
+
+  // Each column is unique: (AA,AA,AA), (CC,CC,CC), (GG,GG,GG), (TT,TT,TT)
+  REQUIRE(gene.compressed.n_patterns == 4);
+  for (size_t i = 0; i < 4; ++i)
+    REQUIRE(gene.compressed.weights[i] == Approx(1.0));
+}
+
+TEST_CASE("compress_sites: all_defined flags correct with gaps") {
+  // Column 0: A,C,G -> all defined
+  // Column 1: A,-,G -> has gap
+  // Column 2: A,C,G -> all defined (same as col 0, collapsed)
+  GeneAlignment gene = make_gene({{"A", "AAA"}, {"B", "C-C"}, {"C", "GGG"}});
+  gene.compress_sites();
+
+  REQUIRE(gene.compressed.n_patterns == 2);
+
+  // Find which pattern is the gap one vs the non-gap one
+  bool found_gap_pattern = false;
+  bool found_nongap_pattern = false;
+  for (size_t p = 0; p < gene.compressed.n_patterns; ++p) {
+    if (gene.compressed.all_defined[p] == 0) {
+      found_gap_pattern = true;
+      REQUIRE(gene.compressed.weights[p] == Approx(1.0));
+    } else {
+      found_nongap_pattern = true;
+      REQUIRE(gene.compressed.weights[p] == Approx(2.0));
+    }
+  }
+  REQUIRE(found_gap_pattern);
+  REQUIRE(found_nongap_pattern);
+}
+
+TEST_CASE("compress_sites: base() accessor returns correct values") {
+  GeneAlignment gene = make_gene({{"A", "AC"}, {"B", "GT"}});
+  gene.compress_sites();
+
+  REQUIRE(gene.compressed.n_patterns == 2);
+  REQUIRE(gene.compressed.n_taxa == 2);
+
+  // Check that we can read the bases back correctly
+  // The exact pattern order depends on the map, so check both patterns
+  bool found_ag = false, found_ct = false;
+  for (size_t p = 0; p < 2; ++p) {
+    uint8_t b0 = gene.compressed.base(p, 0);
+    uint8_t b1 = gene.compressed.base(p, 1);
+    if (b0 == NUC_A && b1 == NUC_G) found_ag = true;
+    if (b0 == NUC_C && b1 == NUC_T) found_ct = true;
+  }
+  REQUIRE(found_ag);
+  REQUIRE(found_ct);
+}
+
+TEST_CASE("compress_sites: empty alignment stays empty") {
+  GeneAlignment gene;
+  gene.compress_sites();
+  REQUIRE(gene.compressed.empty());
+}
+
+TEST_CASE("compress_sites: single-column alignment") {
+  GeneAlignment gene = make_gene({{"A", "A"}, {"B", "C"}});
+  gene.compress_sites();
+
+  REQUIRE(gene.compressed.n_patterns == 1);
+  REQUIRE(gene.compressed.weights[0] == Approx(1.0));
+  REQUIRE(gene.compressed.all_defined[0] == 1);
+}
+
+// --- compressed vs uncompressed equivalence ----------------------------------
+
+TEST_CASE("compressed and uncompressed paths produce identical site patterns") {
+  // Use a non-trivial alignment with duplicate columns and mixed bases
+  GeneAlignment gene_raw = make_gene({{"A", "ACGTACGTNN"},
+                                       {"B", "TGCATGCA--"},
+                                       {"C", "GCATRYNWBH"}});
+  // Uncompressed path
+  std::vector<TuplePatterns> raw_pats;
+  for_each_site_pattern(gene_raw, [&](TuplePatterns p) {
+    raw_pats.push_back(std::move(p));
+  });
+  REQUIRE(raw_pats.size() == 1);
+
+  // Now compress and get site patterns via compressed path
+  GeneAlignment gene_comp = make_gene({{"A", "ACGTACGTNN"},
+                                        {"B", "TGCATGCA--"},
+                                        {"C", "GCATRYNWBH"}});
+  gene_comp.compress_sites();
+  REQUIRE_FALSE(gene_comp.compressed.empty());
+
+  std::vector<TuplePatterns> comp_pats;
+  for_each_site_pattern(gene_comp, [&](TuplePatterns p) {
+    comp_pats.push_back(std::move(p));
+  });
+  REQUIRE(comp_pats.size() == 1);
+
+  // Compare results
+  REQUIRE(comp_pats[0].n_total == Approx(raw_pats[0].n_total));
+  REQUIRE(comp_pats[0].n_counted == Approx(raw_pats[0].n_counted));
+  for (int i = 0; i < 64; ++i) {
+    REQUIRE(comp_pats[0].site_pattern[i] ==
+            Approx(raw_pats[0].site_pattern[i]).margin(1e-12));
+  }
+}
+
+TEST_CASE("compressed and uncompressed: 4-taxa ktuple equivalence") {
+  GeneAlignment gene_raw = make_gene({{"W", "ACGTACGT"},
+                                       {"X", "TGCATGCA"},
+                                       {"Y", "GCATGCAT"},
+                                       {"Z", "ATCGATCG"}});
+  std::vector<TuplePatterns> raw_pats;
+  for_each_ktuple_pattern(gene_raw, 4, [&](TuplePatterns p) {
+    raw_pats.push_back(std::move(p));
+  });
+  REQUIRE(raw_pats.size() == 1);
+
+  GeneAlignment gene_comp = make_gene({{"W", "ACGTACGT"},
+                                        {"X", "TGCATGCA"},
+                                        {"Y", "GCATGCAT"},
+                                        {"Z", "ATCGATCG"}});
+  gene_comp.compress_sites();
+
+  std::vector<TuplePatterns> comp_pats;
+  for_each_ktuple_pattern(gene_comp, 4, [&](TuplePatterns p) {
+    comp_pats.push_back(std::move(p));
+  });
+  REQUIRE(comp_pats.size() == 1);
+
+  REQUIRE(comp_pats[0].n_total == Approx(raw_pats[0].n_total));
+  REQUIRE(comp_pats[0].n_counted == Approx(raw_pats[0].n_counted));
+  for (size_t i = 0; i < comp_pats[0].site_pattern.size(); ++i) {
+    REQUIRE(comp_pats[0].site_pattern[i] ==
+            Approx(raw_pats[0].site_pattern[i]).margin(1e-12));
+  }
+}
+
+TEST_CASE("compressed and uncompressed: site_patterns_for_ktaxa equivalence") {
+  GeneAlignment gene_raw = make_gene({{"A", "AACCGGTT"},
+                                       {"B", "ACACACAC"},
+                                       {"C", "AACCGGTT"}});
+  TuplePatterns raw_pat = site_patterns_for_ktaxa(gene_raw, {"A", "B", "C"});
+
+  GeneAlignment gene_comp = make_gene({{"A", "AACCGGTT"},
+                                        {"B", "ACACACAC"},
+                                        {"C", "AACCGGTT"}});
+  gene_comp.compress_sites();
+  TuplePatterns comp_pat = site_patterns_for_ktaxa(gene_comp, {"A", "B", "C"});
+
+  REQUIRE(comp_pat.n_total == Approx(raw_pat.n_total));
+  REQUIRE(comp_pat.n_counted == Approx(raw_pat.n_counted));
+  for (int i = 0; i < 64; ++i) {
+    REQUIRE(comp_pat.site_pattern[i] ==
+            Approx(raw_pat.site_pattern[i]).margin(1e-12));
+  }
+}
+
+// --- parsers auto-compress ---------------------------------------------------
+
+TEST_CASE("read_phylip: compressed sites populated after parsing") {
+  const std::string phy =
+      "3 4\n"
+      "Alpha ACGT\n"
+      "Beta  TTAG\n"
+      "Gamma CGCA\n";
+  std::istringstream ss(phy);
+  GeneAlignment gene = read_phylip(ss, "mygene");
+
+  REQUIRE_FALSE(gene.compressed.empty());
+  REQUIRE(gene.compressed.n_taxa == 3);
+  REQUIRE(gene.compressed.n_patterns <= 4);  // at most 4 unique columns
+  REQUIRE(gene.compressed.n_patterns >= 1);
+}
+
+TEST_CASE("read_nexus: compressed sites populated after parsing") {
+  const std::string nex =
+      "#NEXUS\n"
+      "BEGIN DATA;\n"
+      "  DIMENSIONS NTAX=3 NCHAR=6;\n"
+      "  FORMAT DATATYPE=DNA;\n"
+      "  MATRIX\n"
+      "  T1 AAAAAA\n"
+      "  T2 AAAAAA\n"
+      "  T3 AAAAAA\n"
+      ";\n"
+      "END;\n";
+  std::istringstream ss(nex);
+  MultiGeneAlignment aln = read_nexus(ss);
+
+  REQUIRE(aln.num_genes() == 1);
+  REQUIRE_FALSE(aln.genes[0].compressed.empty());
+  // All identical columns -> 1 pattern
+  REQUIRE(aln.genes[0].compressed.n_patterns == 1);
+  REQUIRE(aln.genes[0].compressed.weights[0] == Approx(6.0));
+}
+
+TEST_CASE("read_nexus with SETS: each gene partition is compressed") {
+  const std::string nex =
+      "#NEXUS\n"
+      "BEGIN DATA;\n"
+      "  DIMENSIONS NTAX=2 NCHAR=6;\n"
+      "  FORMAT DATATYPE=DNA;\n"
+      "  MATRIX\n"
+      "  T1 AAACCC\n"
+      "  T2 AAACCC\n"
+      ";\n"
+      "END;\n"
+      "BEGIN SETS;\n"
+      "  CHARSET loc1 = 1-3;\n"
+      "  CHARSET loc2 = 4-6;\n"
+      "END;\n";
+  std::istringstream ss(nex);
+  MultiGeneAlignment aln = read_nexus(ss);
+
+  REQUIRE(aln.num_genes() == 2);
+  // loc1: AAA -> 1 unique pattern with weight 3
+  REQUIRE_FALSE(aln.genes[0].compressed.empty());
+  REQUIRE(aln.genes[0].compressed.n_patterns == 1);
+  REQUIRE(aln.genes[0].compressed.weights[0] == Approx(3.0));
+  // loc2: CCC -> 1 unique pattern with weight 3
+  REQUIRE_FALSE(aln.genes[1].compressed.empty());
+  REQUIRE(aln.genes[1].compressed.n_patterns == 1);
+  REQUIRE(aln.genes[1].compressed.weights[0] == Approx(3.0));
 }
 
 // --- for_each_site_pattern ---------------------------------------------------

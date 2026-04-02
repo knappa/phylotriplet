@@ -109,23 +109,20 @@ PYBIND11_MODULE(phylotriplet, m) {
       .def_property_readonly("num_taxa", &GeneAlignment::num_taxa,
                              "Number of sequences.")
       .def_property_readonly("length", &GeneAlignment::length,
-                             "Number of (variant) columns stored.")
-      .def_property_readonly("original_length", &GeneAlignment::original_length,
-                             "Original alignment length (variant + invariant).")
-      .def_property_readonly("total_invariant_sites",
-                             &GeneAlignment::total_invariant_sites,
-                             "Total number of invariant sites filtered out.")
+                             "Alignment length in columns.")
+      .def("compress_sites", &GeneAlignment::compress_sites,
+           "Deduplicate identical columns into weighted unique patterns.\n\n"
+           "Speeds up site pattern computation by iterating over unique\n"
+           "column patterns instead of all sites.  Called automatically\n"
+           "at parse time.")
       .def_property_readonly(
-          "invariant_counts",
-          [](const GeneAlignment& g) {
-            return std::vector<size_t>(g.invariant_counts.begin(),
-                                      g.invariant_counts.end());
-          },
-          "Per-base counts of invariant sites [A, C, G, T].")
-      .def("filter_invariant_sites", &GeneAlignment::filter_invariant_sites,
-           "Remove invariant sites, storing their counts separately.\n\n"
-           "An invariant site is one where every taxon has the same\n"
-           "unambiguous base (no gaps, no ambiguity codes).")
+          "compressed_empty",
+          [](const GeneAlignment& g) { return g.compressed.empty(); },
+          "True if no compressed data is available.")
+      .def_property_readonly(
+          "compressed_n_patterns",
+          [](const GeneAlignment& g) { return g.compressed.n_patterns; },
+          "Number of unique column patterns (0 if not compressed).")
       .def("taxon_names", &GeneAlignment::taxon_names,
            "List of taxon names (in sequence order).")
       .def(
@@ -340,47 +337,43 @@ PYBIND11_MODULE(phylotriplet, m) {
   // -- I/O: sequence alignments ----------------------------------------------
 
   m.def("read_nexus_file", &read_nexus_file, py::arg("filepath"),
-        py::arg("filter_invariant") = true,
         "Read a NEXUS alignment file.\n\n"
         "Supports multiple DATA/CHARACTERS blocks (one per gene), a single\n"
         "DATA block split by a SETS block with CHARSET commands, sequential\n"
         "and interleaved MATRIX formats, and DNA/RNA datatypes.\n\n"
         "Args:\n"
-        "    filepath: Path to the NEXUS file\n"
-        "    filter_invariant: Remove invariant sites on load (default True)\n\n"
+        "    filepath: Path to the NEXUS file\n\n"
         "Returns:\n"
         "    MultiGeneAlignment");
 
   m.def(
       "read_phylip_file",
       [](const std::string& filepath, const std::string& gene_name,
-         bool interleaved, bool filter_invariant) {
+         bool interleaved) {
         MultiGeneAlignment aln;
         aln.genes.push_back(
-            read_phylip_file(filepath, gene_name, interleaved, filter_invariant));
+            read_phylip_file(filepath, gene_name, interleaved));
         return aln;
       },
       py::arg("filepath"), py::arg("gene_name") = std::string(""),
-      py::arg("interleaved") = false, py::arg("filter_invariant") = true,
+      py::arg("interleaved") = false,
       "Read a single PHYLIP alignment file.\n\n"
       "Args:\n"
       "    filepath:   Path to the PHYLIP file\n"
       "    gene_name:  Name for this gene; defaults to the filename stem\n"
-      "    interleaved: Set True for interleaved PHYLIP format\n"
-      "    filter_invariant: Remove invariant sites on load (default True)\n\n"
+      "    interleaved: Set True for interleaved PHYLIP format\n\n"
       "Returns:\n"
       "    MultiGeneAlignment (with one gene)");
 
   m.def("read_phylip_files", &read_phylip_files, py::arg("filepaths"),
         py::arg("gene_names") = std::vector<std::string>{},
-        py::arg("interleaved") = false, py::arg("filter_invariant") = true,
+        py::arg("interleaved") = false,
         "Read multiple PHYLIP alignment files as a multi-gene alignment.\n\n"
         "Args:\n"
         "    filepaths:   List of paths, one per gene\n"
         "    gene_names:  Optional list of gene names; defaults to filename "
         "stems\n"
-        "    interleaved: Set True for interleaved PHYLIP format\n"
-        "    filter_invariant: Remove invariant sites on load (default True)\n\n"
+        "    interleaved: Set True for interleaved PHYLIP format\n\n"
         "Returns:\n"
         "    MultiGeneAlignment");
 

@@ -211,12 +211,12 @@ class TestComputeSitePatterns:
 
     def test_n_total_and_n_counted(self, nexus_3tax):
         p = pt.read_nexus_file(nexus_3tax).triplet_site_patterns()[0]
-        assert p.site_pattern_total == pytest.approx(4.0)
-        assert p.site_pattern_counted == pytest.approx(4.0)
+        assert p.n_total == pytest.approx(4.0)
+        assert p.n_counted == pytest.approx(4.0)
 
     def test_sum_n_equals_n_counted(self, nexus_3tax):
         for p in pt.read_nexus_file(nexus_3tax).triplet_site_patterns():
-            assert sum(p.site_pattern) == pytest.approx(p.site_pattern_counted)
+            assert sum(p.site_pattern) == pytest.approx(p.n_counted)
 
     def test_all_A_alignment_fills_aaa_bucket(self, tmp_path):
         p = tmp_path / "aaa.nex"
@@ -238,8 +238,8 @@ class TestComputeSitePatterns:
             "  A AAAA\n  B A-AA\n  C AAAA\n;\nEND;\n"
         )
         pats = pt.read_nexus_file(str(p)).triplet_site_patterns()
-        assert pats[0].site_pattern_total == pytest.approx(4.0)
-        assert pats[0].site_pattern_counted == pytest.approx(3.0)
+        assert pats[0].n_total == pytest.approx(4.0)
+        assert pats[0].n_counted == pytest.approx(3.0)
 
     def test_ambiguous_N_distributes_uniformly(self, tmp_path):
         # A=A, B=A, C=N → AAA, AAC, AAG, AAT each get 0.25
@@ -265,8 +265,8 @@ class TestComputeSitePatterns:
         p = pats[0]
         assert p.site_pattern[0]  == pytest.approx(3.0)
         assert p.site_pattern[21] == pytest.approx(3.0)
-        assert p.site_pattern_total   == pytest.approx(6.0)
-        assert p.site_pattern_counted == pytest.approx(6.0)
+        assert p.n_total   == pytest.approx(6.0)
+        assert p.n_counted == pytest.approx(6.0)
 
     def test_four_taxa_gives_four_triplets(self, tmp_path):
         p = tmp_path / "four.nex"
@@ -288,5 +288,60 @@ class TestComputeSitePatterns:
         pats = pt.read_phylip_file(phylip_seq).triplet_site_patterns()
         assert len(pats) == 1
         p = pats[0]
-        assert p.site_pattern_total == pytest.approx(4.0)
-        assert sum(p.site_pattern) == pytest.approx(p.site_pattern_counted)
+        assert p.n_total == pytest.approx(4.0)
+        assert sum(p.site_pattern) == pytest.approx(p.n_counted)
+
+
+# -- Site compression bindings -------------------------------------------------
+
+class TestSiteCompression:
+
+    def test_compressed_after_nexus_parse(self, nexus_3tax):
+        aln = pt.read_nexus_file(nexus_3tax)
+        gene = aln[0]
+        assert not gene.compressed_empty
+        assert gene.compressed_n_patterns >= 1
+        assert gene.compressed_n_patterns <= gene.length
+
+    def test_compressed_after_phylip_parse(self, phylip_seq):
+        aln = pt.read_phylip_file(phylip_seq)
+        gene = aln[0]
+        assert not gene.compressed_empty
+        assert gene.compressed_n_patterns >= 1
+
+    def test_all_identical_columns_one_pattern(self, tmp_path):
+        p = tmp_path / "ident.nex"
+        p.write_text(
+            "#NEXUS\nBEGIN DATA;\n  DIMENSIONS NTAX=3 NCHAR=5;\n"
+            "  FORMAT DATATYPE=DNA;\n  MATRIX\n"
+            "  A AAAAA\n  B CCCCC\n  C GGGGG\n;\nEND;\n"
+        )
+        aln = pt.read_nexus_file(str(p))
+        assert aln[0].compressed_n_patterns == 1
+
+    def test_all_distinct_columns_max_patterns(self, tmp_path):
+        """Each distinct column is its own pattern."""
+        p = tmp_path / "dist.nex"
+        p.write_text(
+            "#NEXUS\nBEGIN DATA;\n  DIMENSIONS NTAX=2 NCHAR=4;\n"
+            "  FORMAT DATATYPE=DNA;\n  MATRIX\n"
+            "  A ACGT\n  B TGCA\n;\nEND;\n"
+        )
+        gene = pt.read_nexus_file(str(p))[0]
+        assert gene.compressed_n_patterns == 4
+
+    def test_compressed_patterns_do_not_change_results(self, tmp_path):
+        """Site patterns are identical whether compression happened or not."""
+        nex = (
+            "#NEXUS\nBEGIN DATA;\n  DIMENSIONS NTAX=3 NCHAR=8;\n"
+            "  FORMAT DATATYPE=DNA;\n  MATRIX\n"
+            "  A ACGTACGT\n  B TGCATGCA\n  C GCATGCAT\n;\nEND;\n"
+        )
+        p = tmp_path / "comp.nex"
+        p.write_text(nex)
+        pats = pt.read_nexus_file(str(p)).triplet_site_patterns()
+        assert len(pats) == 1
+        assert pats[0].n_total == pytest.approx(8.0)
+        assert sum(pats[0].site_pattern) == pytest.approx(
+            pats[0].n_counted
+        )

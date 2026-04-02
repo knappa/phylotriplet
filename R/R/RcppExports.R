@@ -160,6 +160,33 @@ gene_taxon_names_rcpp <- function(gene_ptr) {
     .Call(`_phylotriplet_gene_taxon_names_rcpp`, gene_ptr)
 }
 
+#' Check if a GeneAlignment has compressed site data (internal)
+#'
+#' @param gene_ptr External pointer from get_gene_rcpp
+#' @return Logical; TRUE if no compressed data is available
+#' @keywords internal
+gene_compressed_empty_rcpp <- function(gene_ptr) {
+    .Call(`_phylotriplet_gene_compressed_empty_rcpp`, gene_ptr)
+}
+
+#' Get the number of unique column patterns in a GeneAlignment (internal)
+#'
+#' @param gene_ptr External pointer from get_gene_rcpp
+#' @return Integer; 0 if not compressed
+#' @keywords internal
+gene_compressed_n_patterns_rcpp <- function(gene_ptr) {
+    .Call(`_phylotriplet_gene_compressed_n_patterns_rcpp`, gene_ptr)
+}
+
+#' Get the alignment length (number of columns) for a GeneAlignment (internal)
+#'
+#' @param gene_ptr External pointer from get_gene_rcpp
+#' @return Integer
+#' @keywords internal
+gene_length_rcpp <- function(gene_ptr) {
+    .Call(`_phylotriplet_gene_length_rcpp`, gene_ptr)
+}
+
 #' Compute all triplet site-pattern counts for one gene (internal)
 #'
 #' @param gene_ptr External pointer from get_gene_rcpp

@@ -26,14 +26,16 @@ inline std::string to_upper(std::string s) {
 
 inline std::string trim(const std::string& s) {
   const size_t a = s.find_first_not_of(" \t\r\n");
-  if (a == std::string::npos) return "";
+  if (a == std::string::npos)
+    return "";
   const size_t b = s.find_last_not_of(" \t\r\n");
   return s.substr(a, b - a + 1);
 }
 
 inline bool starts_with_icase(const std::string& s, const char* prefix) {
   const size_t plen = std::strlen(prefix);
-  if (s.size() < plen) return false;
+  if (s.size() < plen)
+    return false;
   for (size_t i = 0; i < plen; ++i)
     if (std::toupper(static_cast<unsigned char>(s[i])) !=
         std::toupper(static_cast<unsigned char>(prefix[i])))
@@ -75,11 +77,13 @@ inline std::string strip_nexus_comments(const std::string& s) {
  * Parse an integer value from "KEY=<int>" in an already-upper-cased string.
  * Returns `def` if the key is absent.
  */
-inline int parse_int_key(const std::string& upper, const std::string& key,
+inline int parse_int_key(const std::string& upper,
+                         const std::string& key,
                          int def = 0) {
   const std::string needle = key + "=";
   const size_t p = upper.find(needle);
-  if (p == std::string::npos) return def;
+  if (p == std::string::npos)
+    return def;
   try {
     return std::stoi(upper.substr(p + needle.size()));
   } catch (...) {
@@ -103,7 +107,8 @@ inline std::vector<size_t> parse_charset_ranges(const std::string& s) {
     if (dash != std::string::npos) {
       const size_t lo = std::stoull(tok.substr(0, dash));
       const size_t hi = std::stoull(tok.substr(dash + 1));
-      for (size_t i = lo; i <= hi; ++i) cols.push_back(i - 1);  // 0-indexed
+      for (size_t i = lo; i <= hi; ++i)
+        cols.push_back(i - 1);  // 0-indexed
     } else {
       cols.push_back(std::stoull(tok) - 1);
     }
@@ -126,7 +131,8 @@ inline std::string read_nexus_name(const std::string& line, size_t& pos) {
          std::isspace(static_cast<unsigned char>(line[pos])))
     ++pos;
 
-  if (pos >= line.size()) return "";
+  if (pos >= line.size())
+    return "";
 
   if (line[pos] == '\'') {
     // Quoted name
@@ -165,23 +171,28 @@ inline std::string read_nexus_name(const std::string& line, size_t& pos) {
  * sequence are stripped).  Handles sequences wrapped across multiple lines.
  */
 inline std::vector<Sequence> parse_matrix_sequential(
-    const std::vector<std::string>& lines, int ntax, int /*nchar*/) {
+    const std::vector<std::string>& lines,
+    int ntax,
+    int /*nchar*/) {
   std::vector<Sequence> seqs;
   std::map<std::string, size_t> name_idx;
 
   for (const auto& raw : lines) {
     const std::string line = trim(raw);
-    if (line.empty()) continue;
+    if (line.empty())
+      continue;
 
     size_t pos = 0;
     const std::string name = read_nexus_name(line, pos);
-    if (name.empty()) continue;
+    if (name.empty())
+      continue;
 
     // Determine taxon slot
     size_t idx;
     auto it = name_idx.find(name);
     if (it == name_idx.end()) {
-      if (static_cast<int>(seqs.size()) >= ntax) continue;
+      if (static_cast<int>(seqs.size()) >= ntax)
+        continue;
       idx = seqs.size();
       name_idx[name] = idx;
       seqs.push_back({name, {}});
@@ -210,7 +221,9 @@ inline std::vector<Sequence> parse_matrix_sequential(
  * sequence data.  Blank lines are treated as block separators.
  */
 inline std::vector<Sequence> parse_matrix_interleaved(
-    const std::vector<std::string>& lines, int ntax, int /*nchar*/) {
+    const std::vector<std::string>& lines,
+    int ntax,
+    int /*nchar*/) {
   std::vector<Sequence> seqs;
   std::map<std::string, size_t> name_idx;
   bool first_block = true;
@@ -228,13 +241,15 @@ inline std::vector<Sequence> parse_matrix_interleaved(
 
     size_t pos = 0;
     const std::string token = read_nexus_name(line, pos);
-    if (token.empty()) continue;
+    if (token.empty())
+      continue;
 
     size_t idx;
     bool token_is_name;
 
     if (first_block) {
-      if (static_cast<int>(seqs.size()) >= ntax) continue;
+      if (static_cast<int>(seqs.size()) >= ntax)
+        continue;
       idx = seqs.size();
       name_idx[token] = idx;
       seqs.push_back({token, {}});
@@ -247,7 +262,8 @@ inline std::vector<Sequence> parse_matrix_interleaved(
       idx = static_cast<size_t>(block_pos);
       token_is_name = false;
       if (idx < seqs.size())
-        for (char c : token) seqs[idx].bases.push_back(char_to_nucleotide(c));
+        for (char c : token)
+          seqs[idx].bases.push_back(char_to_nucleotide(c));
     }
 
     // Append rest of sequence data on this line
@@ -289,8 +305,7 @@ inline std::vector<Sequence> parse_matrix_interleaved(
  *  - Nested comments [...]
  */
 inline MultiGeneAlignment read_nexus(std::istream& stream,
-                                     const std::string& source = "<stream>",
-                                     bool filter_invariant = true) {
+                                     const std::string& source = "<stream>") {
   // Read entire content and strip comments
   std::string content((std::istreambuf_iterator<char>(stream)),
                       std::istreambuf_iterator<char>());
@@ -307,7 +322,8 @@ inline MultiGeneAlignment read_nexus(std::istream& stream,
     for (char c : content) {
       if (c == ';') {
         cur = detail::trim(cur);
-        if (!cur.empty()) stmts.push_back(cur);
+        if (!cur.empty())
+          stmts.push_back(cur);
         cur.clear();
       } else {
         cur += c;
@@ -399,14 +415,15 @@ inline MultiGeneAlignment read_nexus(std::istream& stream,
         std::vector<std::string> mlines;
         std::istringstream mss(matrix_content);
         std::string mline;
-        while (std::getline(mss, mline)) mlines.push_back(mline);
+        while (std::getline(mss, mline))
+          mlines.push_back(mline);
 
         GeneAlignment gene;
         gene.gene_name = gene_name;
         gene.sequences =
             interleave ? detail::parse_matrix_interleaved(mlines, ntax, nchar)
                        : detail::parse_matrix_sequential(mlines, ntax, nchar);
-        if (filter_invariant) gene.filter_invariant_sites();
+        gene.compress_sites();
         result.genes.push_back(std::move(gene));
 
       } else if (ublock == "SETS") {
@@ -414,12 +431,14 @@ inline MultiGeneAlignment read_nexus(std::istream& stream,
           const std::string ss = detail::to_upper(detail::trim(stmt));
           if (detail::starts_with_icase(ss, "CHARSET")) {
             const size_t kp = ss.find("CHARSET");
-            std::string rest = detail::trim(stmt.substr(stmt.find_first_not_of(
-                " \t\r\n", stmt.find("CHARSET") != std::string::npos
-                               ? stmt.find("CHARSET") + 7
-                               : 7)));
+            std::string rest = detail::trim(stmt.substr(
+                stmt.find_first_not_of(" \t\r\n",
+                                       stmt.find("CHARSET") != std::string::npos
+                                           ? stmt.find("CHARSET") + 7
+                                           : 7)));
             const size_t eq = rest.find('=');
-            if (eq == std::string::npos) continue;
+            if (eq == std::string::npos)
+              continue;
             std::string csname = detail::trim(rest.substr(0, eq));
             // Unquote if needed
             if (csname.size() >= 2 && csname.front() == '\'' &&
@@ -451,7 +470,7 @@ inline MultiGeneAlignment read_nexus(std::istream& stream,
             gene.sequences[t].bases.push_back(full.sequences[t].bases[col]);
         }
       }
-      if (filter_invariant) gene.filter_invariant_sites();
+      gene.compress_sites();
       split.genes.push_back(std::move(gene));
     }
     return split;
@@ -461,11 +480,11 @@ inline MultiGeneAlignment read_nexus(std::istream& stream,
 }
 
 /** Read a NEXUS file by path. */
-inline MultiGeneAlignment read_nexus_file(const std::string& filepath,
-                                           bool filter_invariant = true) {
+inline MultiGeneAlignment read_nexus_file(const std::string& filepath) {
   std::ifstream f(filepath);
-  if (!f.is_open()) throw std::runtime_error("Cannot open file: " + filepath);
-  return read_nexus(f, filepath, filter_invariant);
+  if (!f.is_open())
+    throw std::runtime_error("Cannot open file: " + filepath);
+  return read_nexus(f, filepath);
 }
 
 // -- Public PHYLIP API
@@ -487,15 +506,16 @@ inline MultiGeneAlignment read_nexus_file(const std::string& filepath,
 inline GeneAlignment read_phylip(std::istream& stream,
                                  const std::string& gene_name = "gene",
                                  bool interleaved = false,
-                                 const std::string& source = "<stream>",
-                                 bool filter_invariant = true) {
+                                 const std::string& source = "<stream>") {
   // Skip blank lines to find the header
   std::string header;
   while (std::getline(stream, header)) {
     header = detail::trim(header);
-    if (!header.empty()) break;
+    if (!header.empty())
+      break;
   }
-  if (header.empty()) throw std::runtime_error("Empty PHYLIP file: " + source);
+  if (header.empty())
+    throw std::runtime_error("Empty PHYLIP file: " + source);
 
   int ntax = 0, nchar = 0;
   {
@@ -512,7 +532,8 @@ inline GeneAlignment read_phylip(std::istream& stream,
   std::vector<std::string> lines;
   {
     std::string ln;
-    while (std::getline(stream, ln)) lines.push_back(ln);
+    while (std::getline(stream, ln))
+      lines.push_back(ln);
   }
 
   if (!interleaved) {
@@ -520,8 +541,10 @@ inline GeneAlignment read_phylip(std::istream& stream,
     int ti = 0;
     for (const auto& raw : lines) {
       const std::string line = detail::trim(raw);
-      if (line.empty()) continue;
-      if (ti >= ntax) break;
+      if (line.empty())
+        continue;
+      if (ti >= ntax)
+        break;
       std::istringstream lss(line);
       lss >> gene.sequences[ti].taxon;
       std::string chunk;
@@ -577,7 +600,7 @@ inline GeneAlignment read_phylip(std::istream& stream,
     }
   }
 
-  if (filter_invariant) gene.filter_invariant_sites();
+  gene.compress_sites();
   return gene;
 }
 
@@ -585,19 +608,20 @@ inline GeneAlignment read_phylip(std::istream& stream,
  *  gene_name defaults to the filename stem (no extension). */
 inline GeneAlignment read_phylip_file(const std::string& filepath,
                                       const std::string& gene_name = "",
-                                      bool interleaved = false,
-                                      bool filter_invariant = true) {
+                                      bool interleaved = false) {
   std::ifstream f(filepath);
-  if (!f.is_open()) throw std::runtime_error("Cannot open file: " + filepath);
+  if (!f.is_open())
+    throw std::runtime_error("Cannot open file: " + filepath);
 
   std::string name = gene_name;
   if (name.empty()) {
     size_t slash = filepath.find_last_of("/\\");
     name = (slash != std::string::npos) ? filepath.substr(slash + 1) : filepath;
     size_t dot = name.find_last_of('.');
-    if (dot != std::string::npos) name = name.substr(0, dot);
+    if (dot != std::string::npos)
+      name = name.substr(0, dot);
   }
-  return read_phylip(f, name, interleaved, filepath, filter_invariant);
+  return read_phylip(f, name, interleaved, filepath);
 }
 
 /**
@@ -609,14 +633,13 @@ inline GeneAlignment read_phylip_file(const std::string& filepath,
  */
 inline MultiGeneAlignment read_phylip_files(
     const std::vector<std::string>& filepaths,
-    const std::vector<std::string>& gene_names = {}, bool interleaved = false,
-    bool filter_invariant = true) {
+    const std::vector<std::string>& gene_names = {},
+    bool interleaved = false) {
   MultiGeneAlignment result;
   result.genes.reserve(filepaths.size());
   for (size_t i = 0; i < filepaths.size(); ++i) {
     const std::string& name = (i < gene_names.size()) ? gene_names[i] : "";
-    result.genes.push_back(
-        read_phylip_file(filepaths[i], name, interleaved, filter_invariant));
+    result.genes.push_back(read_phylip_file(filepaths[i], name, interleaved));
   }
   return result;
 }

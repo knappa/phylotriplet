@@ -23,7 +23,8 @@ namespace phylotriplet {
  *          single-entry result as an error).
  */
 inline std::vector<std::vector<std::string>> spectral_laplacian_partition(
-    const Eigen::MatrixXd& adj_matrix, const std::vector<std::string>& taxa) {
+    const Eigen::MatrixXd& adj_matrix,
+    const std::vector<std::string>& taxa) {
   // basic checks
   const auto n = adj_matrix.rows();
   if (adj_matrix.cols() != n) {
@@ -51,7 +52,8 @@ inline std::vector<std::vector<std::string>> spectral_laplacian_partition(
   // count zero (or near-zero) eigenvalues
   std::vector<int> zero_idx;
   for (int i = 0; i < evals.size(); ++i) {
-    if (std::abs(evals[i]) <= tol) zero_idx.push_back(i);
+    if (std::abs(evals[i]) <= tol)
+      zero_idx.push_back(i);
   }
 
   if (zero_idx.size() > 1) {
@@ -59,7 +61,8 @@ inline std::vector<std::vector<std::string>> spectral_laplacian_partition(
     std::vector<int> visited(n, 0);
     std::vector<std::vector<std::string>> components;
     for (int i = 0; i < n; ++i) {
-      if (visited[i]) continue;
+      if (visited[i])
+        continue;
       std::vector<std::string> comp;
       std::queue<int> q;
       q.push(i);
@@ -87,7 +90,8 @@ inline std::vector<std::vector<std::string>> spectral_laplacian_partition(
   // find multiplicity around second smallest
   std::vector<int> special_idx;
   for (int i = 0; i < evals.size(); ++i) {
-    if (std::abs(evals[i] - second_val) <= tol) special_idx.push_back(i);
+    if (std::abs(evals[i] - second_val) <= tol)
+      special_idx.push_back(i);
   }
 
   Eigen::VectorXd component_vec(n);

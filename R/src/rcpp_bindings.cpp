@@ -192,6 +192,39 @@ CharacterVector gene_taxon_names_rcpp(SEXP gene_ptr) {
   return CharacterVector(names.begin(), names.end());
 }
 
+//' Check if a GeneAlignment has compressed site data (internal)
+//'
+//' @param gene_ptr External pointer from get_gene_rcpp
+//' @return Logical; TRUE if no compressed data is available
+//' @keywords internal
+// [[Rcpp::export]]
+bool gene_compressed_empty_rcpp(SEXP gene_ptr) {
+  Rcpp::XPtr<GeneAlignment> ptr(gene_ptr);
+  return ptr->compressed.empty();
+}
+
+//' Get the number of unique column patterns in a GeneAlignment (internal)
+//'
+//' @param gene_ptr External pointer from get_gene_rcpp
+//' @return Integer; 0 if not compressed
+//' @keywords internal
+// [[Rcpp::export]]
+int gene_compressed_n_patterns_rcpp(SEXP gene_ptr) {
+  Rcpp::XPtr<GeneAlignment> ptr(gene_ptr);
+  return static_cast<int>(ptr->compressed.n_patterns);
+}
+
+//' Get the alignment length (number of columns) for a GeneAlignment (internal)
+//'
+//' @param gene_ptr External pointer from get_gene_rcpp
+//' @return Integer
+//' @keywords internal
+// [[Rcpp::export]]
+int gene_length_rcpp(SEXP gene_ptr) {
+  Rcpp::XPtr<GeneAlignment> ptr(gene_ptr);
+  return static_cast<int>(ptr->length());
+}
+
 // -- Single-gene site-pattern functions
 // ----------------------------------------
 

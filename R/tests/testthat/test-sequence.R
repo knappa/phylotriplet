@@ -94,8 +94,8 @@ test_that("read_nexus returns a PhylotripletAlignment", {
 test_that("read_nexus: num_genes and taxon count are correct", {
   path <- write_tmp(NEXUS_3TAX, ".nex")
   aln <- read_nexus(path)
-  expect_equal(alignment_num_genes_rcpp(aln$.ptr), 1L)
-  taxa <- alignment_taxon_names_rcpp(aln$.ptr)
+  expect_equal(phylotriplet:::alignment_num_genes_rcpp(aln$.ptr), 1L)
+  taxa <- phylotriplet:::alignment_taxon_names_rcpp(aln$.ptr)
   expect_equal(sort(as.character(taxa)), c("Alpha", "Beta", "Gamma"))
 })
 
@@ -110,16 +110,16 @@ test_that("read_nexus: print method runs without error", {
 test_that("read_nexus: TITLE sets gene name (accessible via Rcpp)", {
   path <- write_tmp(NEXUS_WITH_TITLE, ".nex")
   aln <- read_nexus(path)
-  expect_equal(alignment_num_genes_rcpp(aln$.ptr), 1L)
+  expect_equal(phylotriplet:::alignment_num_genes_rcpp(aln$.ptr), 1L)
   # The alignment exists and has 2 taxa
-  taxa <- alignment_taxon_names_rcpp(aln$.ptr)
+  taxa <- phylotriplet:::alignment_taxon_names_rcpp(aln$.ptr)
   expect_equal(length(taxa), 2L)
 })
 
 test_that("read_nexus: multiple DATA blocks → multiple genes", {
   path <- write_tmp(NEXUS_MULTIGENE, ".nex")
   aln <- read_nexus(path)
-  expect_equal(alignment_num_genes_rcpp(aln$.ptr), 2L)
+  expect_equal(phylotriplet:::alignment_num_genes_rcpp(aln$.ptr), 2L)
 })
 
 test_that("read_nexus: file-not-found throws", {
@@ -148,8 +148,8 @@ test_that("read_phylip_files: single file returns PhylotripletAlignment", {
   path <- write_tmp(PHYLIP_SEQ, ".phy")
   aln <- read_phylip_files(path)
   expect_s3_class(aln, "PhylotripletAlignment")
-  expect_equal(alignment_num_genes_rcpp(aln$.ptr), 1L)
-  taxa <- alignment_taxon_names_rcpp(aln$.ptr)
+  expect_equal(phylotriplet:::alignment_num_genes_rcpp(aln$.ptr), 1L)
+  taxa <- phylotriplet:::alignment_taxon_names_rcpp(aln$.ptr)
   expect_equal(sort(as.character(taxa)), c("Alpha", "Beta", "Gamma"))
 })
 
@@ -157,7 +157,7 @@ test_that("read_phylip_files: two files → two genes", {
   p1 <- write_tmp(PHYLIP_SEQ, ".phy")
   p2 <- write_tmp(c("2 3", "X ACG", "Y TTA"), ".phy")
   aln <- read_phylip_files(c(p1, p2))
-  expect_equal(alignment_num_genes_rcpp(aln$.ptr), 2L)
+  expect_equal(phylotriplet:::alignment_num_genes_rcpp(aln$.ptr), 2L)
 })
 
 test_that("read_phylip_files: file-not-found throws", {
@@ -202,10 +202,10 @@ test_that("triplet_site_patterns: n_total and n_counted are numeric", {
   path <- write_tmp(NEXUS_3TAX, ".nex")
   aln <- read_nexus(path)
   pats <- triplet_site_patterns(aln)
-  expect_type(pats$site_pattern_total, "double")
-  expect_type(pats$site_pattern_counted, "double")
-  expect_equal(pats$site_pattern_total[1], 4.0)
-  expect_equal(pats$site_pattern_counted[1], 4.0)
+  expect_type(pats$n_total, "double")
+  expect_type(pats$n_counted, "double")
+  expect_equal(pats$n_total[1], 4.0)
+  expect_equal(pats$n_counted[1], 4.0)
 })
 
 test_that("triplet_site_patterns: sum(n) equals n_counted", {
@@ -245,8 +245,8 @@ test_that("triplet_site_patterns: gap sites reduce n_counted but not n_total", {
   path <- write_tmp(nex, ".nex")
   aln <- read_nexus(path)
   pats <- triplet_site_patterns(aln)
-  expect_equal(pats$site_pattern_total[1], 4.0)
-  expect_equal(pats$site_pattern_counted[1], 3.0)
+  expect_equal(pats$n_total[1], 4.0)
+  expect_equal(pats$n_counted[1], 3.0)
 })
 
 test_that("triplet_site_patterns: multi-gene accumulates correctly", {
@@ -259,8 +259,8 @@ test_that("triplet_site_patterns: multi-gene accumulates correctly", {
   # AAA: index 0+1 = 1; CCC: 1*16+1*4+1+1 = 22 (1-indexed)
   expect_equal(n_vec[1],  3.0)   # AAA from gene_a
   expect_equal(n_vec[22], 3.0)   # CCC from gene_b
-  expect_equal(pats$site_pattern_total[1],   6.0)
-  expect_equal(pats$site_pattern_counted[1], 6.0)
+  expect_equal(pats$n_total[1],   6.0)
+  expect_equal(pats$n_counted[1], 6.0)
 })
 
 test_that("triplet_site_patterns: SETS block splits and both loci contribute", {
@@ -278,7 +278,7 @@ test_that("triplet_site_patterns via read_phylip_files works end-to-end", {
   aln <- read_phylip_files(path)
   pats <- triplet_site_patterns(aln)
   expect_equal(nrow(pats), 1L)
-  expect_equal(pats$site_pattern_counted[1], 2.0)
+  expect_equal(pats$n_counted[1], 2.0)
   expect_equal(pats$site_pattern[[1]][1], 2.0)   # AAA
 })
 
@@ -300,4 +300,102 @@ test_that("triplet_site_patterns: ambiguous base N distributes uniformly", {
   expect_equal(n_vec[3], 0.25, tolerance = 1e-10)
   expect_equal(n_vec[4], 0.25, tolerance = 1e-10)
   expect_equal(sum(n_vec), 1.0, tolerance = 1e-10)
+})
+
+# -- site compression ---------------------------------------------------------
+
+test_that("compressed sites populated after NEXUS parse", {
+  path <- write_tmp(NEXUS_3TAX, ".nex")
+  aln <- read_nexus(path)
+  gene <- get_gene(aln, 1L)
+  expect_false(phylotriplet:::gene_compressed_empty_rcpp(gene$.ptr))
+  np <- phylotriplet:::gene_compressed_n_patterns_rcpp(gene$.ptr)
+  expect_true(np >= 1L)
+  expect_true(np <= phylotriplet:::gene_length_rcpp(gene$.ptr))
+})
+
+test_that("compressed sites populated after PHYLIP parse", {
+  path <- write_tmp(PHYLIP_SEQ, ".phy")
+  aln <- read_phylip_files(path)
+  gene <- get_gene(aln, 1L)
+  expect_false(phylotriplet:::gene_compressed_empty_rcpp(gene$.ptr))
+})
+
+test_that("all-identical columns yield one unique pattern", {
+  nex <- c(
+    "#NEXUS", "BEGIN DATA;",
+    "  DIMENSIONS NTAX=3 NCHAR=5;",
+    "  FORMAT DATATYPE=DNA;",
+    "  MATRIX", "  A AAAAA", "  B CCCCC", "  C GGGGG", ";", "END;"
+  )
+  path <- write_tmp(nex, ".nex")
+  aln <- read_nexus(path)
+  gene <- get_gene(aln, 1L)
+  expect_equal(phylotriplet:::gene_compressed_n_patterns_rcpp(gene$.ptr), 1L)
+})
+
+test_that("all-distinct columns preserve all patterns", {
+  nex <- c(
+    "#NEXUS", "BEGIN DATA;",
+    "  DIMENSIONS NTAX=2 NCHAR=4;",
+    "  FORMAT DATATYPE=DNA;",
+    "  MATRIX", "  A ACGT", "  B TGCA", ";", "END;"
+  )
+  path <- write_tmp(nex, ".nex")
+  aln <- read_nexus(path)
+  gene <- get_gene(aln, 1L)
+  expect_equal(phylotriplet:::gene_compressed_n_patterns_rcpp(gene$.ptr), 4L)
+})
+
+test_that("SETS block: each gene partition is compressed separately", {
+  path <- write_tmp(NEXUS_SETS, ".nex")
+  aln <- read_nexus(path)
+  gene1 <- get_gene(aln, 1L)
+  gene2 <- get_gene(aln, 2L)
+  expect_false(phylotriplet:::gene_compressed_empty_rcpp(gene1$.ptr))
+  expect_false(phylotriplet:::gene_compressed_empty_rcpp(gene2$.ptr))
+  # Each partition has 3 columns
+  expect_true(phylotriplet:::gene_compressed_n_patterns_rcpp(gene1$.ptr) <= 3L)
+  expect_true(phylotriplet:::gene_compressed_n_patterns_rcpp(gene2$.ptr) <= 3L)
+})
+
+test_that("compression does not change site pattern results", {
+  # Use a 3-taxon alignment with duplicate columns
+  nex <- c(
+    "#NEXUS", "BEGIN DATA;",
+    "  DIMENSIONS NTAX=3 NCHAR=8;",
+    "  FORMAT DATATYPE=DNA;",
+    "  MATRIX",
+    "  A ACGTACGT",
+    "  B TGCATGCA",
+    "  C GCATGCAT",
+    ";", "END;"
+  )
+  path <- write_tmp(nex, ".nex")
+  aln <- read_nexus(path)
+  pats <- triplet_site_patterns(aln)
+  expect_equal(nrow(pats), 1L)
+  expect_equal(pats$n_total[1], 8.0)
+  expect_equal(sum(pats$site_pattern[[1]]), pats$n_counted[1], tolerance = 1e-10)
+})
+
+test_that("compression with gaps: site patterns still correct", {
+  nex <- c(
+    "#NEXUS", "BEGIN DATA;",
+    "  DIMENSIONS NTAX=3 NCHAR=6;",
+    "  FORMAT DATATYPE=DNA;",
+    "  MATRIX",
+    "  A AAAAAA",
+    "  B AA-AA-",
+    "  C AAAAAA",
+    ";", "END;"
+  )
+  path <- write_tmp(nex, ".nex")
+  aln <- read_nexus(path)
+  pats <- triplet_site_patterns(aln)
+  # 6 sites, 2 have gaps -> n_counted = 4
+  expect_equal(pats$n_total[1], 6.0)
+  expect_equal(pats$n_counted[1], 4.0)
+  # All non-gap sites are AAA -> site_pattern[1] = 4
+  expect_equal(pats$site_pattern[[1]][1], 4.0)
 })

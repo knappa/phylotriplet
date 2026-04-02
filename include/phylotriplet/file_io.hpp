@@ -39,7 +39,8 @@ namespace detail {
  *                or "<string>").
  */
 inline std::vector<WeightedTree> parse_weighted_trees_from_stream(
-    std::istream& stream, const std::string& source) {
+    std::istream& stream,
+    const std::string& source) {
   std::vector<WeightedTree> trees;
   std::string line;
   int line_num = 0;

@@ -13,6 +13,7 @@ option(BUILD_TOOLS "Build command-line tools" OFF)
 add_library(phylotriplet INTERFACE)
 target_include_directories(phylotriplet INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party/LBFGSpp>
     $<INSTALL_INTERFACE:include>
 )
 

@@ -44,7 +44,8 @@ class TreeNode {
    * Returns a raw pointer to the newly-added child (owned by this node).
    */
   TreeNode* add_child(std::shared_ptr<TreeNode> child, double d = -1.0) {
-    if (d >= 0.0) child->dist = d;
+    if (d >= 0.0)
+      child->dist = d;
     child->parent = this;
     children.push_back(std::move(child));
     return children.back().get();
@@ -63,7 +64,8 @@ class TreeNode {
    * Returns nullptr if this node has no parent (i.e. is the root).
    */
   std::shared_ptr<TreeNode> detach() {
-    if (!parent) return nullptr;
+    if (!parent)
+      return nullptr;
     auto& siblings = parent->children;
     for (auto it = siblings.begin(); it != siblings.end(); ++it) {
       if (it->get() == this) {
@@ -101,7 +103,8 @@ class TreeNode {
   std::vector<TreeNode*> get_leaves() const {
     std::vector<TreeNode*> leaves;
     for (auto* node : traverse()) {
-      if (node->is_leaf()) leaves.push_back(node);
+      if (node->is_leaf())
+        leaves.push_back(node);
     }
     return leaves;
   }
@@ -109,7 +112,8 @@ class TreeNode {
   /** Return the names of all leaf nodes under this node, in postorder. */
   std::vector<std::string> get_leaf_names() const {
     std::vector<std::string> names;
-    for (auto* leaf : get_leaves()) names.push_back(leaf->name);
+    for (auto* leaf : get_leaves())
+      names.push_back(leaf->name);
     return names;
   }
 
@@ -122,11 +126,13 @@ class TreeNode {
    * Throws std::runtime_error if any name is not present as a leaf.
    */
   TreeNode* get_common_ancestor(const std::vector<std::string>& taxa) const {
-    if (taxa.empty()) return nullptr;
+    if (taxa.empty())
+      return nullptr;
 
     std::map<std::string, TreeNode*> leaf_map;
     for (auto* node : traverse()) {
-      if (node->is_leaf()) leaf_map[node->name] = node;
+      if (node->is_leaf())
+        leaf_map[node->name] = node;
     }
 
     std::vector<TreeNode*> nodes;
@@ -172,7 +178,8 @@ class TreeNode {
         if (node->is_leaf() && !node->name.empty() && !keep.count(node->name) &&
             node->parent) {
           auto& sib = node->parent->children;
-          sib.erase(std::remove_if(sib.begin(), sib.end(),
+          sib.erase(std::remove_if(sib.begin(),
+                                   sib.end(),
                                    [node](const std::shared_ptr<TreeNode>& p) {
                                      return p.get() == node;
                                    }),
@@ -211,11 +218,13 @@ class TreeNode {
  private:
   void traverse_preorder(std::vector<TreeNode*>& out) const {
     out.push_back(const_cast<TreeNode*>(this));
-    for (const auto& c : children) c->traverse_preorder(out);
+    for (const auto& c : children)
+      c->traverse_preorder(out);
   }
 
   void traverse_postorder(std::vector<TreeNode*>& out) const {
-    for (const auto& c : children) c->traverse_postorder(out);
+    for (const auto& c : children)
+      c->traverse_postorder(out);
     out.push_back(const_cast<TreeNode*>(this));
   }
 
@@ -226,25 +235,30 @@ class TreeNode {
       const TreeNode* n = q.front();
       q.pop();
       out.push_back(const_cast<TreeNode*>(n));
-      for (const auto& c : n->children) q.push(c.get());
+      for (const auto& c : n->children)
+        q.push(c.get());
     }
   }
 
   /** Lowest common ancestor of a non-empty set of nodes. */
   static TreeNode* lca_of(const std::vector<TreeNode*>& nodes) {
-    if (nodes.size() == 1) return nodes[0];
+    if (nodes.size() == 1)
+      return nodes[0];
 
     // Ancestor sets as depth-indexed: collect ancestors of first node.
     std::set<TreeNode*> ancestors;
-    for (TreeNode* p = nodes[0]; p; p = p->parent) ancestors.insert(p);
+    for (TreeNode* p = nodes[0]; p; p = p->parent)
+      ancestors.insert(p);
 
     // Intersect with ancestors of each subsequent node.
     for (size_t i = 1; i < nodes.size(); ++i) {
       std::set<TreeNode*> cur_anc;
-      for (TreeNode* p = nodes[i]; p; p = p->parent) cur_anc.insert(p);
+      for (TreeNode* p = nodes[i]; p; p = p->parent)
+        cur_anc.insert(p);
       std::set<TreeNode*> inter;
       for (TreeNode* a : ancestors)
-        if (cur_anc.count(a)) inter.insert(a);
+        if (cur_anc.count(a))
+          inter.insert(a);
       ancestors = std::move(inter);
     }
 
@@ -253,7 +267,8 @@ class TreeNode {
     int max_depth = -1;
     for (TreeNode* a : ancestors) {
       int d = 0;
-      for (TreeNode* p = a->parent; p; p = p->parent) ++d;
+      for (TreeNode* p = a->parent; p; p = p->parent)
+        ++d;
       if (d > max_depth) {
         max_depth = d;
         lca = a;
@@ -276,7 +291,8 @@ class TreeNode {
         break;
       }
     }
-    if (!needs_quotes) return n;
+    if (!needs_quotes)
+      return n;
     std::string result = "'";
     for (char c : n) {
       if (c == '\'')
@@ -292,11 +308,13 @@ class TreeNode {
     if (!children.empty()) {
       s += '(';
       for (size_t i = 0; i < children.size(); ++i) {
-        if (i) s += ',';
+        if (i)
+          s += ',';
         children[i]->newick_recursive(s);
       }
       s += ')';
-      if (!name.empty()) s += quote_newick_name(name);
+      if (!name.empty())
+        s += quote_newick_name(name);
     } else {
       s += quote_newick_name(name);
     }
@@ -323,13 +341,17 @@ inline std::string parse_name(const std::string& s, size_t& pos) {
   std::string name;
   if (pos < s.size() && s[pos] == '\'') {
     ++pos;
-    while (pos < s.size() && s[pos] != '\'') name += s[pos++];
-    if (pos < s.size()) ++pos;
+    while (pos < s.size() && s[pos] != '\'')
+      name += s[pos++];
+    if (pos < s.size())
+      ++pos;
     return name;
   } else if (pos < s.size() && s[pos] == '\"') {
     ++pos;
-    while (pos < s.size() && s[pos] != '\"') name += s[pos++];
-    if (pos < s.size()) ++pos;
+    while (pos < s.size() && s[pos] != '\"')
+      name += s[pos++];
+    if (pos < s.size())
+      ++pos;
     return name;
   }
   while (pos < s.size() && s[pos] != '(' && s[pos] != ')' && s[pos] != ',' &&
@@ -342,7 +364,8 @@ inline std::string parse_name(const std::string& s, size_t& pos) {
 
 inline double parse_double(const std::string& s, size_t& pos) {
   std::string num;
-  if (pos < s.size() && (s[pos] == '-' || s[pos] == '+')) num += s[pos++];
+  if (pos < s.size() && (s[pos] == '-' || s[pos] == '+'))
+    num += s[pos++];
   while (pos < s.size() &&
          (std::isdigit(static_cast<unsigned char>(s[pos])) || s[pos] == '.' ||
           s[pos] == 'e' || s[pos] == 'E' || s[pos] == '-' || s[pos] == '+')) {
@@ -370,9 +393,11 @@ inline std::shared_ptr<TreeNode> parse_node(const std::string& s, size_t& pos) {
       child->parent = node.get();
       node->children.push_back(std::move(child));
       skip_ws(s, pos);
-      if (pos < s.size() && s[pos] == ',') ++pos;
+      if (pos < s.size() && s[pos] == ',')
+        ++pos;
     }
-    if (pos < s.size()) ++pos;  // consume ')'
+    if (pos < s.size())
+      ++pos;  // consume ')'
 
     // Optional label (internal node name; ignored if numeric).
     skip_ws(s, pos);
@@ -428,7 +453,8 @@ class PhyloTree {
     size_t pos = 0;
     auto r = detail::parse_node(newick, pos);
     detail::skip_ws(newick, pos);
-    if (pos < newick.size() && newick[pos] == ';') ++pos;
+    if (pos < newick.size() && newick[pos] == ';')
+      ++pos;
     detail::skip_ws(newick, pos);
     if (pos < newick.size())
       throw std::invalid_argument(
@@ -447,7 +473,8 @@ class PhyloTree {
 
   /** Prune the tree to keep only the listed taxa (see TreeNode::prune). */
   void prune(const std::vector<std::string>& taxa_to_keep) {
-    if (root) root->prune(taxa_to_keep);
+    if (root)
+      root->prune(taxa_to_keep);
   }
 
   /**
@@ -465,10 +492,12 @@ class PhyloTree {
    */
   std::vector<std::array<std::string, 3>> get_triplets() const {
     std::vector<std::array<std::string, 3>> triplets;
-    if (!root) return triplets;
+    if (!root)
+      return triplets;
 
     for (auto* node : root->traverse()) {
-      if (node->is_leaf()) continue;
+      if (node->is_leaf())
+        continue;
 
       // Collect leaf names for each child's subtree.
       std::vector<std::vector<std::string>> child_leaves;
@@ -478,13 +507,16 @@ class PhyloTree {
 
       for (size_t i = 0; i < child_leaves.size(); ++i) {
         const auto& cherry = child_leaves[i];
-        if (cherry.size() < 2) continue;
+        if (cherry.size() < 2)
+          continue;
 
         // Build the flat list of outgroup leaves from all other children.
         std::vector<const std::string*> outgroup;
         for (size_t j = 0; j < child_leaves.size(); ++j) {
-          if (j == i) continue;
-          for (const auto& name : child_leaves[j]) outgroup.push_back(&name);
+          if (j == i)
+            continue;
+          for (const auto& name : child_leaves[j])
+            outgroup.push_back(&name);
         }
 
         for (size_t a = 0; a < cherry.size(); ++a)
@@ -508,9 +540,11 @@ class PhyloTree {
     auto s2 = other.bipartitions();
     int d = 0;
     for (const auto& s : s1)
-      if (!s2.count(s)) ++d;
+      if (!s2.count(s))
+        ++d;
     for (const auto& s : s2)
-      if (!s1.count(s)) ++d;
+      if (!s1.count(s))
+        ++d;
     return d;
   }
 
@@ -523,25 +557,30 @@ class PhyloTree {
    * of which internal node we encounter it from.
    */
   std::set<std::set<std::string>> bipartitions() const {
-    if (!root) return {};
+    if (!root)
+      return {};
 
     auto all_leaves = root->get_leaf_names();
     std::set<std::string> all_set(all_leaves.begin(), all_leaves.end());
     std::set<std::set<std::string>> splits;
 
     for (auto* node : root->traverse()) {
-      if (node->is_leaf()) continue;
-      if (node == root.get()) continue;
+      if (node->is_leaf())
+        continue;
+      if (node == root.get())
+        continue;
 
       auto sub = node->get_leaf_names();
       std::set<std::string> side1(sub.begin(), sub.end());
 
       // Skip trivial bipartitions.
-      if (side1.size() <= 1 || side1.size() >= all_set.size() - 1) continue;
+      if (side1.size() <= 1 || side1.size() >= all_set.size() - 1)
+        continue;
 
       std::set<std::string> side2;
       for (const auto& l : all_set)
-        if (!side1.count(l)) side2.insert(l);
+        if (!side1.count(l))
+          side2.insert(l);
 
       // Canonicalize by lexicographic order so both internal nodes on
       // either side of the same split produce the same key.

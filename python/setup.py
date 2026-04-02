@@ -51,7 +51,7 @@ ext_modules = [
     Pybind11Extension(
         "phylotriplet",
         ["bindings.cpp"],
-        include_dirs=["../include", find_eigen3()],
+        include_dirs=["../include", "../third_party/LBFGSpp", find_eigen3()],
         cxx_std=14,
     ),
 ]
