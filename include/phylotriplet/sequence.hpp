@@ -130,10 +130,8 @@ inline NucleotideDistribution nucleotide_distribution(uint8_t b) {
   if (count == 0)
     return {0.0, 0.0, 0.0, 0.0};
   const double w = 1.0 / count;
-  return {(b & NUC_A) ? w : 0.0,
-          (b & NUC_C) ? w : 0.0,
-          (b & NUC_G) ? w : 0.0,
-          (b & NUC_T) ? w : 0.0};
+  return {
+      (b & NUC_A) ? w : 0.0, (b & NUC_C) ? w : 0.0, (b & NUC_G) ? w : 0.0, (b & NUC_T) ? w : 0.0};
 }
 
 /** A single named sequence; bases are bitmask-encoded (see NUC_* constants). */
@@ -169,9 +167,7 @@ struct GeneAlignment {
   std::vector<Sequence> sequences;
 
   size_t num_taxa() const { return sequences.size(); }
-  size_t length() const {
-    return sequences.empty() ? 0 : sequences[0].bases.size();
-  }
+  size_t length() const { return sequences.empty() ? 0 : sequences[0].bases.size(); }
 
   std::vector<std::string> taxon_names() const {
     std::vector<std::string> ns;
@@ -245,8 +241,7 @@ struct GeneAlignment {
       } else {
         const size_t idx = compressed.n_patterns++;
         col_map[col] = idx;
-        compressed.pattern_data.insert(
-            compressed.pattern_data.end(), col.begin(), col.end());
+        compressed.pattern_data.insert(compressed.pattern_data.end(), col.begin(), col.end());
         compressed.weights.push_back(1.0);
 
         uint8_t defined = 1;
@@ -351,8 +346,7 @@ struct TuplePatterns {
 
   /** Construct for k taxa that are already sorted lexicographically. */
   explicit TuplePatterns(std::vector<std::string> sorted_taxa)
-      : taxa(std::move(sorted_taxa)),
-        site_pattern(detail::pow4_rt(taxa.size()), 0.0) {}
+      : taxa(std::move(sorted_taxa)), site_pattern(detail::pow4_rt(taxa.size()), 0.0) {}
 
   /** Number of taxa in the tuple. */
   size_t order() const { return taxa.size(); }

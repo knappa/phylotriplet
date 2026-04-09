@@ -739,6 +739,44 @@ compute_jc69_triplet_weights.PhylotripletGene <- function(alignment, taxon1,
                                          taxon3, theta)
 }
 
+#' GTR triplet topology weights
+#'
+#' Computes weights for the three rooted triplet topologies under the GTR
+#' substitution model.
+#'
+#' @param alignment A \code{PhylotripletAlignment} or \code{PhylotripletGene}
+#'   object.
+#' @param taxon1,taxon2,taxon3 Taxon names (any order).
+#' @param theta Population-scaled mutation rate parameter.
+#' @param mu Mutation rate scaling parameter (default 1.0).
+#' @param ... Ignored.
+#'
+#' @return Named numeric vector of length 3: weights for topologies
+#'   (ab|c, ac|b, bc|a) where a,b,c are sorted taxon names
+#'
+#' @export
+compute_gtr_triplet_weights <- function(alignment, taxon1, taxon2, taxon3,
+                                        theta, mu = 1.0, ...) {
+  UseMethod("compute_gtr_triplet_weights")
+}
+
+#' @export
+compute_gtr_triplet_weights.PhylotripletAlignment <- function(alignment,
+                                                              taxon1, taxon2,
+                                                              taxon3, theta,
+                                                              mu = 1.0, ...) {
+  compute_gtr_triplet_weights_rcpp(alignment$.ptr, taxon1, taxon2, taxon3,
+                                   theta, mu)
+}
+
+#' @export
+compute_gtr_triplet_weights.PhylotripletGene <- function(alignment, taxon1,
+                                                         taxon2, taxon3,
+                                                         theta, mu = 1.0, ...) {
+  gene_compute_gtr_triplet_weights_rcpp(alignment$.ptr, taxon1, taxon2,
+                                        taxon3, theta, mu)
+}
+
 #' @export
 compute_triplet_weights.PhylotripletAlignment <- function(alignment, taxon1,
                                                           taxon2, taxon3, ...) {

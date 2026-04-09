@@ -23,8 +23,7 @@ struct WeightedTree {
   WeightedTree(const std::string& nwk, double w = 1.0)
       : tree(PhyloTree::from_newick(nwk)), weight(w) {}
 
-  explicit WeightedTree(PhyloTree t, double w = 1.0)
-      : tree(std::move(t)), weight(w) {}
+  explicit WeightedTree(PhyloTree t, double w = 1.0) : tree(std::move(t)), weight(w) {}
 
   /** Serialise the stored tree back to a Newick string. */
   std::string newick() const { return tree.to_newick(); }
@@ -38,9 +37,8 @@ namespace detail {
  * @param source  Human-readable name used in error messages (e.g. file path
  *                or "<string>").
  */
-inline std::vector<WeightedTree> parse_weighted_trees_from_stream(
-    std::istream& stream,
-    const std::string& source) {
+inline std::vector<WeightedTree> parse_weighted_trees_from_stream(std::istream& stream,
+                                                                  const std::string& source) {
   std::vector<WeightedTree> trees;
   std::string line;
   int line_num = 0;
@@ -68,8 +66,7 @@ inline std::vector<WeightedTree> parse_weighted_trees_from_stream(
     line = std::move(clean_line);
 
     // Strip any trailing space
-    if (!line.empty() &&
-        std::isspace(static_cast<unsigned char>(line.back()))) {
+    if (!line.empty() && std::isspace(static_cast<unsigned char>(line.back()))) {
       line.pop_back();
     }
 
@@ -88,15 +85,13 @@ inline std::vector<WeightedTree> parse_weighted_trees_from_stream(
       try {
         weight = std::stod(weight_str);
       } catch (...) {
-        throw std::runtime_error("Invalid weight at line " +
-                                 std::to_string(line_num) + " of " + source +
-                                 ": '" + weight_str + "'");
+        throw std::runtime_error("Invalid weight at line " + std::to_string(line_num) + " of " +
+                                 source + ": '" + weight_str + "'");
       }
     } else {
       if (!weight_warning_already_displayed) {
-        PHYLOTRIPLET_WARN("Warning: no weight found at line " +
-                          std::to_string(line_num) + " of " + source +
-                          ", defaulting to 1.0.");
+        PHYLOTRIPLET_WARN("Warning: no weight found at line " + std::to_string(line_num) + " of " +
+                          source + ", defaulting to 1.0.");
       }
     }
 
@@ -107,8 +102,8 @@ inline std::vector<WeightedTree> parse_weighted_trees_from_stream(
 
     // Basic Newick validation: must end with semicolon.
     if (newick.empty()) {
-      throw std::runtime_error("Empty Newick string at line " +
-                               std::to_string(line_num) + " of " + source);
+      throw std::runtime_error("Empty Newick string at line " + std::to_string(line_num) + " of " +
+                               source);
     }
     if (newick.back() != ';') {
       newick += ';';
@@ -119,8 +114,8 @@ inline std::vector<WeightedTree> parse_weighted_trees_from_stream(
     try {
       trees.emplace_back(newick, weight);
     } catch (const std::exception& e) {
-      throw std::runtime_error("Error on line " + std::to_string(line_num) +
-                               " of " + source + ": " + e.what());
+      throw std::runtime_error("Error on line " + std::to_string(line_num) + " of " + source +
+                               ": " + e.what());
     }
   }
 
@@ -138,8 +133,7 @@ inline std::vector<WeightedTree> parse_weighted_trees_from_stream(
  * @throws std::runtime_error if file cannot be opened, format is invalid,
  *         or the file contains no trees
  */
-inline std::vector<WeightedTree> read_weighted_trees_from_file(
-    const std::string& filepath) {
+inline std::vector<WeightedTree> read_weighted_trees_from_file(const std::string& filepath) {
   std::ifstream file(filepath);
   if (!file.is_open()) {
     throw std::runtime_error("Cannot open file: " + filepath);
@@ -162,8 +156,7 @@ inline std::vector<WeightedTree> read_weighted_trees_from_file(
  * @return Vector of WeightedTree objects
  * @throws std::runtime_error if format is invalid
  */
-inline std::vector<WeightedTree> read_weighted_trees_from_string(
-    const std::string& content) {
+inline std::vector<WeightedTree> read_weighted_trees_from_string(const std::string& content) {
   std::istringstream stream(content);
   return detail::parse_weighted_trees_from_stream(stream, "<string>");
 }

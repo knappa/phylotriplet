@@ -29,8 +29,7 @@ class TreeNode {
   std::vector<std::shared_ptr<TreeNode>> children;
 
   TreeNode() = default;
-  explicit TreeNode(std::string n, double d = 0.0)
-      : name(std::move(n)), dist(d) {}
+  explicit TreeNode(std::string n, double d = 0.0) : name(std::move(n)), dist(d) {}
 
   bool is_leaf() const { return children.empty(); }
   bool is_root() const { return parent == nullptr; }
@@ -86,8 +85,7 @@ class TreeNode {
    * Return all nodes reachable from this node in the requested order.
    * @param strategy  "postorder" (default), "preorder", or "levelorder"
    */
-  std::vector<TreeNode*> traverse(
-      const std::string& strategy = "postorder") const {
+  std::vector<TreeNode*> traverse(const std::string& strategy = "postorder") const {
     std::vector<TreeNode*> result;
     if (strategy == "preorder") {
       traverse_preorder(result);
@@ -175,14 +173,12 @@ class TreeNode {
     while (changed) {
       changed = false;
       for (auto* node : traverse()) {
-        if (node->is_leaf() && !node->name.empty() && !keep.count(node->name) &&
-            node->parent) {
+        if (node->is_leaf() && !node->name.empty() && !keep.count(node->name) && node->parent) {
           auto& sib = node->parent->children;
-          sib.erase(std::remove_if(sib.begin(),
-                                   sib.end(),
-                                   [node](const std::shared_ptr<TreeNode>& p) {
-                                     return p.get() == node;
-                                   }),
+          sib.erase(std::remove_if(
+                        sib.begin(),
+                        sib.end(),
+                        [node](const std::shared_ptr<TreeNode>& p) { return p.get() == node; }),
                     sib.end());
           changed = true;
           break;  // restart with fresh traversal
@@ -195,8 +191,7 @@ class TreeNode {
     while (changed) {
       changed = false;
       for (auto* node : traverse()) {
-        if (!node->is_leaf() && !node->is_root() &&
-            node->children.size() == 1) {
+        if (!node->is_leaf() && !node->is_root() && node->children.size() == 1) {
           auto child = node->children[0];
           child->dist += node->dist;
           TreeNode* par = node->parent;
@@ -285,8 +280,8 @@ class TreeNode {
   static std::string quote_newick_name(const std::string& n) {
     bool needs_quotes = false;
     for (char c : n) {
-      if (std::isspace(static_cast<unsigned char>(c)) || c == '(' || c == ')' ||
-          c == ',' || c == ':' || c == ';' || c == '\'') {
+      if (std::isspace(static_cast<unsigned char>(c)) || c == '(' || c == ')' || c == ',' ||
+          c == ':' || c == ';' || c == '\'') {
         needs_quotes = true;
         break;
       }
@@ -354,9 +349,8 @@ inline std::string parse_name(const std::string& s, size_t& pos) {
       ++pos;
     return name;
   }
-  while (pos < s.size() && s[pos] != '(' && s[pos] != ')' && s[pos] != ',' &&
-         s[pos] != ':' && s[pos] != ';' &&
-         !std::isspace(static_cast<unsigned char>(s[pos]))) {
+  while (pos < s.size() && s[pos] != '(' && s[pos] != ')' && s[pos] != ',' && s[pos] != ':' &&
+         s[pos] != ';' && !std::isspace(static_cast<unsigned char>(s[pos]))) {
     name += s[pos++];
   }
   return name;
@@ -366,15 +360,13 @@ inline double parse_double(const std::string& s, size_t& pos) {
   std::string num;
   if (pos < s.size() && (s[pos] == '-' || s[pos] == '+'))
     num += s[pos++];
-  while (pos < s.size() &&
-         (std::isdigit(static_cast<unsigned char>(s[pos])) || s[pos] == '.' ||
-          s[pos] == 'e' || s[pos] == 'E' || s[pos] == '-' || s[pos] == '+')) {
+  while (pos < s.size() && (std::isdigit(static_cast<unsigned char>(s[pos])) || s[pos] == '.' ||
+                            s[pos] == 'e' || s[pos] == 'E' || s[pos] == '-' || s[pos] == '+')) {
     num += s[pos++];
   }
   if (num.empty() || num == "-" || num == "+")
     throw std::invalid_argument(
-        "Newick parse error: expected a numeric branch length at position " +
-        std::to_string(pos));
+        "Newick parse error: expected a numeric branch length at position " + std::to_string(pos));
   return std::stod(num);
 }
 
@@ -401,8 +393,7 @@ inline std::shared_ptr<TreeNode> parse_node(const std::string& s, size_t& pos) {
 
     // Optional label (internal node name; ignored if numeric).
     skip_ws(s, pos);
-    if (pos < s.size() && s[pos] != ':' && s[pos] != ',' && s[pos] != ')' &&
-        s[pos] != ';') {
+    if (pos < s.size() && s[pos] != ':' && s[pos] != ',' && s[pos] != ')' && s[pos] != ';') {
       node->name = parse_name(s, pos);
     }
   } else {
@@ -457,9 +448,8 @@ class PhyloTree {
       ++pos;
     detail::skip_ws(newick, pos);
     if (pos < newick.size())
-      throw std::invalid_argument(
-          "Newick parse error: unexpected trailing content: '" +
-          newick.substr(pos) + "'");
+      throw std::invalid_argument("Newick parse error: unexpected trailing content: '" +
+                                  newick.substr(pos) + "'");
     return PhyloTree(std::move(r));
   }
 

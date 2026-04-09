@@ -20,16 +20,13 @@ struct WeightedTriplet {
   std::array<std::string, 3> triplet;
   double weight;
 
-  WeightedTriplet(const std::array<std::string, 3>& trip)
-      : triplet(trip), weight(1.0) {}
-  WeightedTriplet(const std::array<std::string, 3>& trip, double w)
-      : triplet(trip), weight(w) {}
+  WeightedTriplet(const std::array<std::string, 3>& trip) : triplet(trip), weight(1.0) {}
+  WeightedTriplet(const std::array<std::string, 3>& trip, double w) : triplet(trip), weight(w) {}
 };
 
 namespace detail {
 
-inline void gen_tree_recursive(const std::vector<WeightedTriplet>& triplets,
-                               TreeNode* node) {
+inline void gen_tree_recursive(const std::vector<WeightedTriplet>& triplets, TreeNode* node) {
   // Base case: single triplet (a,b,c) encodes a,b|c.
   if (triplets.size() == 1) {
     const auto& t = triplets[0].triplet;
@@ -68,8 +65,7 @@ inline void gen_tree_recursive(const std::vector<WeightedTriplet>& triplets,
   // Spectral Laplacian partition → two or more components.
   auto parts = spectral_laplacian_partition(adj_matrix, taxa);
   if (parts.size() < 2) {
-    throw std::runtime_error(
-        "gen_tree: spectral partition failed to split taxa; ");
+    throw std::runtime_error("gen_tree: spectral partition failed to split taxa; ");
   }
 
   for (const auto& comp : parts) {

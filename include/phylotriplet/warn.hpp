@@ -10,8 +10,7 @@
 #if defined(PHYLOTRIPLET_RCPP_WARNINGS)
 #define PHYLOTRIPLET_WARN(msg) Rcpp::warning(msg)
 #elif defined(PHYLOTRIPLET_PY_WARNINGS)
-#define PHYLOTRIPLET_WARN(msg) \
-  pybind11::module_::import("warnings").attr("warn")(msg)
+#define PHYLOTRIPLET_WARN(msg) pybind11::module_::import("warnings").attr("warn")(msg)
 #else
 #define PHYLOTRIPLET_WARN(msg)  \
   do {                          \

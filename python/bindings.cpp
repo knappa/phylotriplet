@@ -173,6 +173,18 @@ PYBIND11_MODULE(phylotriplet, m) {
           "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where a, b, c\n"
           "are the taxon names.")
       .def(
+          "compute_gtr_triplet_weights",
+          [](const GeneAlignment& gene, const std::string& t1,
+             const std::string& t2, const std::string& t3, double theta,
+             double mu) {
+            return compute_gtr_triplet_weights(gene, t1, t2, t3, theta, mu);
+          },
+          py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
+          py::arg("theta"), py::arg("mu") = 1.0,
+          "GTR weights for the three rooted triplet topologies.\n\n"
+          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where a, b, c\n"
+          "are the taxon names.")
+      .def(
           "compute_triplet_weights",
           [](const GeneAlignment& gene, const std::string& t1,
              const std::string& t2, const std::string& t3) {
@@ -306,6 +318,19 @@ PYBIND11_MODULE(phylotriplet, m) {
           py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
           py::arg("theta"),
           "JC69 weights for the three rooted triplet topologies.\n\n"
+          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where a, b, c\n"
+          "are the taxon names.  Genes that do not\n"
+          "contain all three taxa are skipped with a warning.")
+      .def(
+          "compute_gtr_triplet_weights",
+          [](const MultiGeneAlignment& aln, const std::string& t1,
+             const std::string& t2, const std::string& t3, double theta,
+             double mu) {
+            return compute_gtr_triplet_weights(aln, t1, t2, t3, theta, mu);
+          },
+          py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
+          py::arg("theta"), py::arg("mu") = 1.0,
+          "GTR weights for the three rooted triplet topologies.\n\n"
           "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where a, b, c\n"
           "are the taxon names.  Genes that do not\n"
           "contain all three taxa are skipped with a warning.")

@@ -4,9 +4,7 @@
 #include <limits>
 
 #include "catch.hpp"
-#include "phylotriplet/triplet_weights.hpp"
-
-using namespace phylotriplet;
+#include "phylotriplet/util.hpp"
 
 // --- log_sum_exp -------------------------------------------------------------
 

@@ -143,9 +143,9 @@ inline std::vector<std::vector<std::string>> spectral_laplacian_partition(
  * Same as spectral_laplacian_partition but treats the adjacency as unweighted:
  * any non-zero entry becomes 1.0.
  */
-inline std::vector<std::vector<std::string>>
-unweighted_spectral_laplacian_partition(const Eigen::MatrixXd& adj_matrix,
-                                        const std::vector<std::string>& taxa) {
+inline std::vector<std::vector<std::string>> unweighted_spectral_laplacian_partition(
+    const Eigen::MatrixXd& adj_matrix,
+    const std::vector<std::string>& taxa) {
   Eigen::MatrixXd bin = (adj_matrix.array() != 0.0).cast<double>();
   return spectral_laplacian_partition(bin, taxa);
 }

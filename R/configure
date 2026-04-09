@@ -11,6 +11,16 @@ else
     PHYLOTRIPLET_INC="-I../../include"
 fi
 
+# --- LBFGSpp headers ----------------------------------------------------
+if [ -d "inst/include/LBFGSpp" ]; then
+    LBFGSPP_INC="-I../inst/include"
+elif [ -d "../third_party/LBFGSpp" ]; then
+    LBFGSPP_INC="-I../../third_party/LBFGSpp"
+else
+    LBFGSPP_INC=""
+    echo "WARNING: LBFGSpp headers not found." >&2
+fi
+
 # --- Eigen3 headers ------------------------------------------------------
 # Priority: EIGEN3_INCLUDE_DIR env var > pkg-config > common installation paths
 if [ -n "${EIGEN3_INCLUDE_DIR}" ]; then
@@ -40,9 +50,11 @@ if [ -z "${EIGEN3_INC}" ]; then
 fi
 
 echo "* phylotriplet headers: ${PHYLOTRIPLET_INC}"
+echo "* LBFGSpp headers:     ${LBFGSPP_INC}"
 echo "* Eigen3 headers:       ${EIGEN3_INC}"
 
 sed \
     -e "s|@PHYLOTRIPLET_INC@|${PHYLOTRIPLET_INC}|g" \
+    -e "s|@LBFGSPP_INC@|${LBFGSPP_INC}|g" \
     -e "s|@EIGEN3_INC@|${EIGEN3_INC}|g" \
     src/Makevars.in > src/Makevars

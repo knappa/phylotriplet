@@ -288,6 +288,32 @@ gene_compute_jc69_triplet_weights_rcpp <- function(gene_ptr, taxon1, taxon2, tax
     .Call(`_phylotriplet_gene_compute_jc69_triplet_weights_rcpp`, gene_ptr, taxon1, taxon2, taxon3, theta)
 }
 
+#' Compute GTR triplet topology weights (multi-gene, internal)
+#'
+#' @param aln_ptr External pointer from read_nexus_rcpp / read_phylip_files_rcpp
+#' @param taxon1,taxon2,taxon3 Taxon names (any order)
+#' @param theta Population-scaled mutation rate parameter
+#' @param mu Mutation rate scaling parameter (default 1.0)
+#' @return Numeric vector of length 3: weights for the three rooted triplet
+#'   topologies (ab|c, ac|b, bc|a where a,b,c are the sorted taxon names)
+#' @keywords internal
+compute_gtr_triplet_weights_rcpp <- function(aln_ptr, taxon1, taxon2, taxon3, theta, mu = 1.0) {
+    .Call(`_phylotriplet_compute_gtr_triplet_weights_rcpp`, aln_ptr, taxon1, taxon2, taxon3, theta, mu)
+}
+
+#' Compute GTR triplet topology weights (single gene, internal)
+#'
+#' @param gene_ptr External pointer from get_gene_rcpp
+#' @param taxon1,taxon2,taxon3 Taxon names (any order)
+#' @param theta Population-scaled mutation rate parameter
+#' @param mu Mutation rate scaling parameter (default 1.0)
+#' @return Numeric vector of length 3: weights for the three rooted triplet
+#'   topologies (ab|c, ac|b, bc|a where a,b,c are the sorted taxon names)
+#' @keywords internal
+gene_compute_gtr_triplet_weights_rcpp <- function(gene_ptr, taxon1, taxon2, taxon3, theta, mu = 1.0) {
+    .Call(`_phylotriplet_gene_compute_gtr_triplet_weights_rcpp`, gene_ptr, taxon1, taxon2, taxon3, theta, mu)
+}
+
 #' @return Numeric vector of length 3: weights for the three rooted triplet
 #'   topologies (ab|c, ac|b, bc|a where a,b,c are the sorted taxon names)
 #' @keywords internal

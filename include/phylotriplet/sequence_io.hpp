@@ -77,9 +77,7 @@ inline std::string strip_nexus_comments(const std::string& s) {
  * Parse an integer value from "KEY=<int>" in an already-upper-cased string.
  * Returns `def` if the key is absent.
  */
-inline int parse_int_key(const std::string& upper,
-                         const std::string& key,
-                         int def = 0) {
+inline int parse_int_key(const std::string& upper, const std::string& key, int def = 0) {
   const std::string needle = key + "=";
   const size_t p = upper.find(needle);
   if (p == std::string::npos)
@@ -127,8 +125,7 @@ inline std::vector<size_t> parse_charset_ranges(const std::string& s) {
  */
 inline std::string read_nexus_name(const std::string& line, size_t& pos) {
   // Skip leading whitespace
-  while (pos < line.size() &&
-         std::isspace(static_cast<unsigned char>(line[pos])))
+  while (pos < line.size() && std::isspace(static_cast<unsigned char>(line[pos])))
     ++pos;
 
   if (pos >= line.size())
@@ -156,8 +153,7 @@ inline std::string read_nexus_name(const std::string& line, size_t& pos) {
 
   // Unquoted: read until whitespace
   const size_t start = pos;
-  while (pos < line.size() &&
-         !std::isspace(static_cast<unsigned char>(line[pos])))
+  while (pos < line.size() && !std::isspace(static_cast<unsigned char>(line[pos])))
     ++pos;
   return line.substr(start, pos - start);
 }
@@ -170,10 +166,9 @@ inline std::string read_nexus_name(const std::string& line, size_t& pos) {
  * sequential format: one line per taxon, name then sequence (spaces in the
  * sequence are stripped).  Handles sequences wrapped across multiple lines.
  */
-inline std::vector<Sequence> parse_matrix_sequential(
-    const std::vector<std::string>& lines,
-    int ntax,
-    int /*nchar*/) {
+inline std::vector<Sequence> parse_matrix_sequential(const std::vector<std::string>& lines,
+                                                     int ntax,
+                                                     int /*nchar*/) {
   std::vector<Sequence> seqs;
   std::map<std::string, size_t> name_idx;
 
@@ -201,8 +196,7 @@ inline std::vector<Sequence> parse_matrix_sequential(
     }
 
     // Append sequence data (strip any embedded spaces)
-    while (pos < line.size() &&
-           std::isspace(static_cast<unsigned char>(line[pos])))
+    while (pos < line.size() && std::isspace(static_cast<unsigned char>(line[pos])))
       ++pos;
     for (size_t i = pos; i < line.size(); ++i)
       if (!std::isspace(static_cast<unsigned char>(line[i])))
@@ -220,10 +214,9 @@ inline std::vector<Sequence> parse_matrix_sequential(
  * otherwise the entire line (including the first token) is treated as
  * sequence data.  Blank lines are treated as block separators.
  */
-inline std::vector<Sequence> parse_matrix_interleaved(
-    const std::vector<std::string>& lines,
-    int ntax,
-    int /*nchar*/) {
+inline std::vector<Sequence> parse_matrix_interleaved(const std::vector<std::string>& lines,
+                                                      int ntax,
+                                                      int /*nchar*/) {
   std::vector<Sequence> seqs;
   std::map<std::string, size_t> name_idx;
   bool first_block = true;
@@ -268,8 +261,7 @@ inline std::vector<Sequence> parse_matrix_interleaved(
 
     // Append rest of sequence data on this line
     if (token_is_name) {
-      while (pos < line.size() &&
-             std::isspace(static_cast<unsigned char>(line[pos])))
+      while (pos < line.size() && std::isspace(static_cast<unsigned char>(line[pos])))
         ++pos;
     }
     if (idx < seqs.size()) {
@@ -304,16 +296,13 @@ inline std::vector<Sequence> parse_matrix_interleaved(
  *  - NEXUS single-quoted taxon names
  *  - Nested comments [...]
  */
-inline MultiGeneAlignment read_nexus(std::istream& stream,
-                                     const std::string& source = "<stream>") {
+inline MultiGeneAlignment read_nexus(std::istream& stream, const std::string& source = "<stream>") {
   // Read entire content and strip comments
-  std::string content((std::istreambuf_iterator<char>(stream)),
-                      std::istreambuf_iterator<char>());
+  std::string content((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
   content = detail::strip_nexus_comments(content);
 
   if (detail::to_upper(content).find("#NEXUS") == std::string::npos)
-    throw std::runtime_error("Not a NEXUS file (missing #NEXUS header): " +
-                             source);
+    throw std::runtime_error("Not a NEXUS file (missing #NEXUS header): " + source);
 
   // Split into semicolon-delimited statements
   std::vector<std::string> stmts;
@@ -342,15 +331,13 @@ inline MultiGeneAlignment read_nexus(std::istream& stream,
     const std::string upper_full = detail::to_upper(stmts[i]);
 
     if (su.find("BEGIN") != std::string::npos) {
-      const std::string block_name =
-          detail::trim(stmts[i].substr(upper_full.find("BEGIN") + 5));
+      const std::string block_name = detail::trim(stmts[i].substr(upper_full.find("BEGIN") + 5));
       const std::string ublock = detail::to_upper(detail::trim(block_name));
       ++i;
 
       // Collect block body until END
       std::vector<std::string> body;
-      while (i < stmts.size() &&
-             detail::to_upper(detail::trim(stmts[i])) != "END") {
+      while (i < stmts.size() && detail::to_upper(detail::trim(stmts[i])) != "END") {
         body.push_back(stmts[i]);
         ++i;
       }
@@ -384,18 +371,15 @@ inline MultiGeneAlignment read_nexus(std::istream& stream,
               std::string dtype = upper_rest.substr(dt + 9);
               dtype = dtype.substr(0, dtype.find_first_of(" \t\r\n;"));
               if (dtype != "DNA" && dtype != "RNA" && dtype != "NUCLEOTIDE")
-                throw std::runtime_error("Unsupported NEXUS DATATYPE '" +
-                                         dtype + "' in " + source +
+                throw std::runtime_error("Unsupported NEXUS DATATYPE '" + dtype + "' in " + source +
                                          " (expected DNA, RNA, or NUCLEOTIDE)");
             }
 
           } else if (detail::starts_with_icase(ss, "TITLE")) {
-            const size_t kp =
-                stmt.find_first_not_of(" \t\r\n", su2.find("TITLE") + 5);
+            const size_t kp = stmt.find_first_not_of(" \t\r\n", su2.find("TITLE") + 5);
             if (kp != std::string::npos) {
               gene_name = detail::trim(stmt.substr(kp));
-              if (gene_name.size() >= 2 && gene_name.front() == '\'' &&
-                  gene_name.back() == '\'')
+              if (gene_name.size() >= 2 && gene_name.front() == '\'' && gene_name.back() == '\'')
                 gene_name = gene_name.substr(1, gene_name.size() - 2);
             }
 
@@ -406,11 +390,9 @@ inline MultiGeneAlignment read_nexus(std::istream& stream,
         }
 
         if (matrix_content.empty())
-          throw std::runtime_error("DATA block with no MATRIX statement in " +
-                                   source);
+          throw std::runtime_error("DATA block with no MATRIX statement in " + source);
         if (ntax == 0 || nchar == 0)
-          throw std::runtime_error("DATA block missing DIMENSIONS in " +
-                                   source);
+          throw std::runtime_error("DATA block missing DIMENSIONS in " + source);
 
         std::vector<std::string> mlines;
         std::istringstream mss(matrix_content);
@@ -420,9 +402,8 @@ inline MultiGeneAlignment read_nexus(std::istream& stream,
 
         GeneAlignment gene;
         gene.gene_name = gene_name;
-        gene.sequences =
-            interleave ? detail::parse_matrix_interleaved(mlines, ntax, nchar)
-                       : detail::parse_matrix_sequential(mlines, ntax, nchar);
+        gene.sequences = interleave ? detail::parse_matrix_interleaved(mlines, ntax, nchar)
+                                    : detail::parse_matrix_sequential(mlines, ntax, nchar);
         gene.compress_sites();
         result.genes.push_back(std::move(gene));
 
@@ -431,18 +412,15 @@ inline MultiGeneAlignment read_nexus(std::istream& stream,
           const std::string ss = detail::to_upper(detail::trim(stmt));
           if (detail::starts_with_icase(ss, "CHARSET")) {
             const size_t kp = ss.find("CHARSET");
-            std::string rest = detail::trim(stmt.substr(
-                stmt.find_first_not_of(" \t\r\n",
-                                       stmt.find("CHARSET") != std::string::npos
-                                           ? stmt.find("CHARSET") + 7
-                                           : 7)));
+            std::string rest = detail::trim(stmt.substr(stmt.find_first_not_of(
+                " \t\r\n",
+                stmt.find("CHARSET") != std::string::npos ? stmt.find("CHARSET") + 7 : 7)));
             const size_t eq = rest.find('=');
             if (eq == std::string::npos)
               continue;
             std::string csname = detail::trim(rest.substr(0, eq));
             // Unquote if needed
-            if (csname.size() >= 2 && csname.front() == '\'' &&
-                csname.back() == '\'')
+            if (csname.size() >= 2 && csname.front() == '\'' && csname.back() == '\'')
               csname = csname.substr(1, csname.size() - 2);
             const std::string ranges = detail::trim(rest.substr(eq + 1));
             charsets.push_back({csname, detail::parse_charset_ranges(ranges)});
@@ -521,8 +499,7 @@ inline GeneAlignment read_phylip(std::istream& stream,
   {
     std::istringstream hss(header);
     if (!(hss >> ntax >> nchar) || ntax <= 0 || nchar <= 0)
-      throw std::runtime_error("Invalid PHYLIP header '" + header + "' in " +
-                               source);
+      throw std::runtime_error("Invalid PHYLIP header '" + header + "' in " + source);
   }
 
   GeneAlignment gene;
@@ -631,10 +608,9 @@ inline GeneAlignment read_phylip_file(const std::string& filepath,
  * @param gene_names  Optional names for each gene; defaults to filename stem.
  * @param interleaved Applied uniformly to all files.
  */
-inline MultiGeneAlignment read_phylip_files(
-    const std::vector<std::string>& filepaths,
-    const std::vector<std::string>& gene_names = {},
-    bool interleaved = false) {
+inline MultiGeneAlignment read_phylip_files(const std::vector<std::string>& filepaths,
+                                            const std::vector<std::string>& gene_names = {},
+                                            bool interleaved = false) {
   MultiGeneAlignment result;
   result.genes.reserve(filepaths.size());
   for (size_t i = 0; i < filepaths.size(); ++i) {
