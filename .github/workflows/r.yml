@@ -32,6 +32,7 @@ jobs:
         run: |
           mkdir -p R/inst/include
           cp -r include/phylotriplet R/inst/include/
+          cp -r third_party/LBFGSpp/LBFGS.h third_party/LBFGSpp/LBFGSB.h third_party/LBFGSpp/LBFGSpp R/inst/include/
 
       - name: Set up R ${{ matrix.r-version }}
         uses: r-lib/actions/setup-r@v2
