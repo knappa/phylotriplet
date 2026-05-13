@@ -10,9 +10,13 @@
 #include <stdexcept>
 #include <unsupported/Eigen/MatrixFunctions>
 
+#include "integration_weights.hpp"
 #include "sequence.hpp"
 #include "util.hpp"
 #include "warn.hpp"
+
+#include <chrono>
+#include <thread>
 
 namespace phylotriplet {
 
@@ -88,17 +92,19 @@ inline double gtr4_rate(const std::array<double, 4>& pi, const std::array<double
   return gtr4_rate(pi[0], pi[1], pi[2], pi[3], s[0], s[1], s[2], s[3], s[4], s[5]);
 }
 
-inline std::pair<double, std::array<double, 6>> normalize_gtr_params(
-    const std::array<double, 4>& pi,
-    const std::array<double, 6>& s) {
+inline std::pair<double, std::array<double, 6>>
+normalize_gtr_params(const std::array<double, 4>& pi, const std::array<double, 6>& s, double mu) {
   const double rate = gtr4_rate(pi, s);
   if (rate == 0.0)
     throw std::invalid_argument("Zero rate GTR parameters");
 
-  return std::make_pair(
-      rate,
-      std::array<double, 6>{
-          s[0] / rate, s[1] / rate, s[2] / rate, s[3] / rate, s[4] / rate, s[5] / rate});
+  return std::make_pair(rate,
+                        std::array<double, 6>{s[0] * mu / rate,
+                                              s[1] * mu / rate,
+                                              s[2] * mu / rate,
+                                              s[3] * mu / rate,
+                                              s[4] * mu / rate,
+                                              s[5] * mu / rate});
 }
 
 inline std::tuple<Eigen::Matrix4d, Eigen::Matrix4d, Eigen::Vector4d> compute_decomposition(
@@ -315,8 +321,7 @@ template <typename DensityFn>
 inline std::array<double, 64> first_density_integral_impl(
     DensityFn density_fn,
     const double theta,
-    const std::array<double, 2>& tau_branch_lengths,
-    const double max_branch_length) {
+    const std::array<double, 2>& tau_branch_lengths) {
   std::array<double, 64> gene_site_pattern_probs;
   std::array<double, 64> compensation;  // for Kahan summation
   gene_site_pattern_probs.fill(0.0);
@@ -324,20 +329,29 @@ inline std::array<double, 64> first_density_integral_impl(
 
   const double tau1 = tau_branch_lengths[0];
   const double tau2 = tau_branch_lengths[1];
+  const double mean_tau = 0.5 * (tau1 + tau2);
+  const double half_diff_tau = 0.5 * (tau2 - tau1);
+  const double inv_theta_2 = 2.0 / theta;
 
-  const double h1 = std::max(0.01, (tau2 - tau1) * 0.01);
-  const double h2 = 0.01;
+  for (size_t i = 0; i < 20; ++i) {
+    const double x2 = gauss_laguerre_points[i];
+    const double w2 = gauss_laguerre_weights[i];
 
-  for (double t2 = tau2; t2 < max_branch_length; t2 += h2) {
-    for (double t1 = tau1; t1 < tau2; t1 += h1) {
+    const double t2 = 0.5 * theta * x2 + tau2;
+
+    for (size_t j = 0; j < 20; ++j) {
+      const double x1 = gauss_legendre_points[j];
+      const double w1 = gauss_legendre_weights[j];
+
+      const double t1 = half_diff_tau * x1 + mean_tau;
+
       const auto gene_probs = density_fn(t1, t2);
-      const double weight =
-          f1(theta, t1, t2, tau1, tau2) * ((t1 + h1) > tau2 ? (tau2 - t1) : h1) * h2;
-      for (size_t i = 0; i < 64; ++i) {
-        const double term = gene_probs[i] * weight - compensation[i];
-        const double new_sum = gene_site_pattern_probs[i] + term;
-        compensation[i] = (new_sum - gene_site_pattern_probs[i]) - term;
-        gene_site_pattern_probs[i] = new_sum;
+      const double weight = half_diff_tau * inv_theta_2 * exp(-inv_theta_2 * (t1 - tau1)) * w2 * w1;
+      for (size_t idx = 0; idx < 64; ++idx) {
+        const double term = gene_probs[idx] * weight - compensation[idx];
+        const double new_sum = gene_site_pattern_probs[idx] + term;
+        compensation[idx] = (new_sum - gene_site_pattern_probs[idx]) - term;
+        gene_site_pattern_probs[idx] = new_sum;
       }
     }
   }
@@ -350,13 +364,11 @@ inline std::array<double, 64> first_density_integral(
     const std::array<double, 4>& pis,
     const std::array<double, 6>& ss,
     const double theta,
-    const std::array<double, 2>& tau_branch_lengths,
-    const double max_branch_length = 20.0) {
+    const std::array<double, 2>& tau_branch_lengths) {
   return detail::first_density_integral_impl(
       [&](double t1, double t2) { return compute_gtr_triplet_gene_density(pis, ss, {t1, t2}); },
       theta,
-      tau_branch_lengths,
-      max_branch_length);
+      tau_branch_lengths);
 }
 
 inline std::array<double, 64> first_density_integral(
@@ -364,15 +376,13 @@ inline std::array<double, 64> first_density_integral(
     const Eigen::Matrix4d right,
     const Eigen::Vector4d evals,
     const double theta,
-    const std::array<double, 2>& tau_branch_lengths,
-    const double max_branch_length = 20.0) {
+    const std::array<double, 2>& tau_branch_lengths) {
   return detail::first_density_integral_impl(
       [&](double t1, double t2) {
         return compute_gtr_triplet_gene_density(left, right, evals, {t1, t2});
       },
       theta,
-      tau_branch_lengths,
-      max_branch_length);
+      tau_branch_lengths);
 }
 
 namespace detail {
@@ -381,8 +391,7 @@ template <typename DensityFn>
 inline std::array<double, 64> first_density_integral_derivative_t1_fixed_cpt_impl(
     DensityFn density_fn,
     const double theta,
-    const std::array<double, 2>& tau_branch_lengths,
-    const double max_branch_length) {
+    const std::array<double, 2>& tau_branch_lengths) {
   std::array<double, 64> partial_species_site_pattern_prob_deriv;
   std::array<double, 64> compensation;  // for Kahan summation
   partial_species_site_pattern_prob_deriv.fill(0.0);
@@ -390,17 +399,25 @@ inline std::array<double, 64> first_density_integral_derivative_t1_fixed_cpt_imp
 
   const double tau1 = tau_branch_lengths[0];
   const double tau2 = tau_branch_lengths[1];
+  const double inv_theta_2 = 2.0 / theta;
 
-  const double h2 = 0.01;
-  
-  for (double t2 = tau2; t2 < max_branch_length; t2 += h2) {
+  if (tau2 <= tau1) {
+    PHYLOTRIPLET_WARN(
+        phylotriplet_warn_format("tau2 (%.4f) is not greater than tau1 (%.4f)!", tau2, tau1));
+  }
+
+  for (size_t i = 0; i < 20; ++i) {
+    const double x2 = gauss_laguerre_points[i];
+    const double w2 = gauss_laguerre_weights[i];
+    const double t2 = 0.5 * theta * x2 + tau2;
+
     const auto gene_probs = density_fn(tau2, t2);
-    const double weight = f1(theta, tau2, t2, tau1, tau2) * h2;
-    for (size_t i = 0; i < 64; ++i) {
-      const double term = gene_probs[i] * weight - compensation[i];
-      const double new_sum = partial_species_site_pattern_prob_deriv[i] + term;
-      compensation[i] = (new_sum - partial_species_site_pattern_prob_deriv[i]) - term;
-      partial_species_site_pattern_prob_deriv[i] = new_sum;
+    const double weight = inv_theta_2 * w2;
+    for (size_t idx = 0; idx < 64; ++idx) {
+      const double term = gene_probs[idx] * weight - compensation[idx];
+      const double new_sum = partial_species_site_pattern_prob_deriv[idx] + term;
+      compensation[idx] = (new_sum - partial_species_site_pattern_prob_deriv[idx]) - term;
+      partial_species_site_pattern_prob_deriv[idx] = new_sum;
     }
   }
   return partial_species_site_pattern_prob_deriv;
@@ -412,13 +429,11 @@ inline std::array<double, 64> first_density_integral_derivative_t1_fixed_cpt(
     const std::array<double, 4>& pis,
     const std::array<double, 6>& ss,
     const double theta,
-    const std::array<double, 2>& tau_branch_lengths,
-    const double max_branch_length = 20.0) {
+    const std::array<double, 2>& tau_branch_lengths) {
   return detail::first_density_integral_derivative_t1_fixed_cpt_impl(
       [&](double t1, double t2) { return compute_gtr_triplet_gene_density(pis, ss, {t1, t2}); },
       theta,
-      tau_branch_lengths,
-      max_branch_length);
+      tau_branch_lengths);
 }
 
 inline std::array<double, 64> first_density_integral_derivative_t1_fixed_cpt(
@@ -426,17 +441,14 @@ inline std::array<double, 64> first_density_integral_derivative_t1_fixed_cpt(
     const Eigen::Matrix4d& right,
     const Eigen::Vector4d& evals,
     const double theta,
-    const std::array<double, 2>& tau_branch_lengths,
-    const double max_branch_length = 20.0) {
+    const std::array<double, 2>& tau_branch_lengths) {
   return detail::first_density_integral_derivative_t1_fixed_cpt_impl(
       [&](double t1, double t2) {
         return compute_gtr_triplet_gene_density(left, right, evals, {t1, t2});
       },
       theta,
-      tau_branch_lengths,
-      max_branch_length);
+      tau_branch_lengths);
 }
-
 
 namespace detail {
 
@@ -444,8 +456,7 @@ template <typename DensityFn>
 inline std::array<double, 64> first_density_integral_derivative_t2_fixed_cpt_impl(
     DensityFn density_fn,
     const double theta,
-    const std::array<double, 2>& tau_branch_lengths,
-    const double max_branch_length) {
+    const std::array<double, 2>& tau_branch_lengths) {
   std::array<double, 64> partial_species_site_pattern_prob_deriv;
   std::array<double, 64> compensation;  // for Kahan summation
   partial_species_site_pattern_prob_deriv.fill(0.0);
@@ -453,19 +464,23 @@ inline std::array<double, 64> first_density_integral_derivative_t2_fixed_cpt_imp
 
   const double tau1 = tau_branch_lengths[0];
   const double tau2 = tau_branch_lengths[1];
+  const double inv_theta_2 = 2.0 / theta;
 
-  const double h1 = 0.01;
-  
-  for (double t1 = tau1; t1 < tau2; t1 += h1) {
+  for (size_t i = 0; i < 20; ++i) {
+    const double x1 = gauss_legendre_points[i];
+    const double w1 = gauss_legendre_weights[i];
+    const double t1 = 0.5 * (tau2 - tau1) * x1 + 0.5 * (tau1 + tau2);
+
     const auto gene_probs = density_fn(t1, tau2);
-    const double weight = f1(theta, t1, tau2, tau1, tau2) * std::min(h1, tau2 - t1);
-    for (size_t i = 0; i < 64; ++i) {
-      const double term = gene_probs[i] * weight - compensation[i];
-      const double new_sum = partial_species_site_pattern_prob_deriv[i] + term;
-      compensation[i] = (new_sum - partial_species_site_pattern_prob_deriv[i]) - term;
-      partial_species_site_pattern_prob_deriv[i] = new_sum;
+    const double weight = inv_theta_2 * inv_theta_2 * exp(-inv_theta_2 * (t1 - tau1)) * w1;
+    for (size_t idx = 0; idx < 64; ++idx) {
+      const double term = gene_probs[idx] * weight - compensation[idx];
+      const double new_sum = partial_species_site_pattern_prob_deriv[idx] + term;
+      compensation[idx] = (new_sum - partial_species_site_pattern_prob_deriv[idx]) - term;
+      partial_species_site_pattern_prob_deriv[idx] = new_sum;
     }
   }
+
   return partial_species_site_pattern_prob_deriv;
 }
 
@@ -475,13 +490,11 @@ inline std::array<double, 64> first_density_integral_derivative_t2_fixed_cpt(
     const std::array<double, 4>& pis,
     const std::array<double, 6>& ss,
     const double theta,
-    const std::array<double, 2>& tau_branch_lengths,
-    const double max_branch_length = 20.0) {
+    const std::array<double, 2>& tau_branch_lengths) {
   return detail::first_density_integral_derivative_t2_fixed_cpt_impl(
       [&](double t1, double t2) { return compute_gtr_triplet_gene_density(pis, ss, {t1, t2}); },
       theta,
-      tau_branch_lengths,
-      max_branch_length);
+      tau_branch_lengths);
 }
 
 inline std::array<double, 64> first_density_integral_derivative_t2_fixed_cpt(
@@ -489,18 +502,14 @@ inline std::array<double, 64> first_density_integral_derivative_t2_fixed_cpt(
     const Eigen::Matrix4d& right,
     const Eigen::Vector4d& evals,
     const double theta,
-    const std::array<double, 2>& tau_branch_lengths,
-    const double max_branch_length = 20.0) {
+    const std::array<double, 2>& tau_branch_lengths) {
   return detail::first_density_integral_derivative_t2_fixed_cpt_impl(
       [&](double t1, double t2) {
         return compute_gtr_triplet_gene_density(left, right, evals, {t1, t2});
       },
       theta,
-      tau_branch_lengths,
-      max_branch_length);
+      tau_branch_lengths);
 }
-
-
 
 namespace detail {
 
@@ -508,22 +517,28 @@ template <typename DensityFn>
 inline std::array<double, 64> second_density_integral_impl(
     DensityFn density_fn,
     const double theta,
-    const std::array<double, 2>& tau_branch_lengths,
-    const double max_branch_length) {
+    const std::array<double, 2>& tau_branch_lengths) {
   std::array<double, 64> partial_species_site_pattern_prob;
   std::array<double, 64> compensation;  // for Kahan summation
   partial_species_site_pattern_prob.fill(0.0);
   compensation.fill(0.0);
 
-  const double h1 = 0.01;
-  const double h2 = 0.01;
   const double tau1 = tau_branch_lengths[0];
   const double tau2 = tau_branch_lengths[1];
+  const double inv_theta_2 = 2.0 / theta;
 
-  for (double t2 = 0.0; t2 < max_branch_length; t2 += h2) {
-    for (double t1 = 0.0; t1 < t2; t1 += h1) {
+  for (size_t j = 0; j < 20; ++j) {
+    const double x2 = gauss_laguerre_points[j];
+    const double w2 = gauss_laguerre_weights[j];
+    const double t2 = 0.5 * theta * x2 + tau2;
+
+    for (size_t i = 0; i < 20; ++i) {
+      const double x1 = gauss_legendre_points[i];
+      const double w1 = gauss_legendre_weights[i];
+      const double t1 = 0.5 * (t2 - tau1) * x1 + 0.5 * (tau1 + t2);
+
       const auto gene_probs = density_fn(t1, t2);
-      const double weight = f2(theta, t1, t2, tau1, tau2) * std::min(h1, t2 - t1) * h2;
+      const double weight = inv_theta_2 * 0.5 * (t2 - tau2) * exp(-x2 * (1 + x1));
       for (size_t a = 0; a < 4; ++a) {
         for (size_t b = 0; b < 4; ++b) {
           for (size_t c = 0; c < 4; ++c) {
@@ -531,15 +546,22 @@ inline std::array<double, 64> second_density_integral_impl(
             const size_t j = site_pattern_index(a, c, b);
             const size_t k = site_pattern_index(b, c, a);
 
-            const double term = (gene_probs[i] + gene_probs[j] + gene_probs[k]) * weight - compensation[i];
+            const double term =
+                (gene_probs[i] + gene_probs[j] + gene_probs[k]) * weight - compensation[i];
             const double new_sum = partial_species_site_pattern_prob[i] + term;
             compensation[i] = (new_sum - partial_species_site_pattern_prob[i]) - term;
             partial_species_site_pattern_prob[i] = new_sum;
           }
-        } 
+        }
       }
     }
   }
+
+  const double base_scale = exp(-inv_theta_2 * (tau2 - tau1));
+  for (size_t idx = 0; idx < 64; ++idx) {
+    partial_species_site_pattern_prob[idx] *= base_scale;
+  }
+
   return partial_species_site_pattern_prob;
 }
 
@@ -549,13 +571,11 @@ inline std::array<double, 64> second_density_integral(
     const std::array<double, 4>& pis,
     const std::array<double, 6>& ss,
     const double theta,
-    const std::array<double, 2>& tau_branch_lengths,
-    const double max_branch_length = 20.0) {
+    const std::array<double, 2>& tau_branch_lengths) {
   return detail::second_density_integral_impl(
       [&](double t1, double t2) { return compute_gtr_triplet_gene_density(pis, ss, {t1, t2}); },
       theta,
-      tau_branch_lengths,
-      max_branch_length);
+      tau_branch_lengths);
 }
 
 inline std::array<double, 64> second_density_integral(
@@ -563,18 +583,14 @@ inline std::array<double, 64> second_density_integral(
     const Eigen::Matrix4d& right,
     const Eigen::Vector4d& evals,
     const double theta,
-    const std::array<double, 2>& tau_branch_lengths,
-    const double max_branch_length = 20.0) {
+    const std::array<double, 2>& tau_branch_lengths) {
   return detail::second_density_integral_impl(
       [&](double t1, double t2) {
         return compute_gtr_triplet_gene_density(left, right, evals, {t1, t2});
       },
       theta,
-      tau_branch_lengths,
-      max_branch_length);
+      tau_branch_lengths);
 }
-
-
 
 namespace detail {
 
@@ -582,20 +598,28 @@ template <typename DensityFn>
 inline std::array<double, 64> second_density_integral_derivative_t1_fixed_cpt_impl(
     DensityFn density_fn,
     const double theta,
-    const std::array<double, 2>& tau_branch_lengths,
-    const double max_branch_length) {
+    const std::array<double, 2>& tau_branch_lengths) {
   std::array<double, 64> partial_species_site_pattern_prob_deriv;
   std::array<double, 64> compensation;  // for Kahan summation
   partial_species_site_pattern_prob_deriv.fill(0.0);
   compensation.fill(0.0);
 
-  const double h2 = 0.01;
   const double tau1 = tau_branch_lengths[0];
   const double tau2 = tau_branch_lengths[1];
+  const double inv_theta_2 = 2.0 / theta;
 
-  for (double t2 = 0.0; t2 < max_branch_length; t2 += h2) {
+  if (tau2 <= tau1) {
+    PHYLOTRIPLET_WARN(
+        phylotriplet_warn_format("tau2 (%.4f) is not greater than tau1 (%.4f)!", tau2, tau1));
+  }
+
+  for (size_t j = 0; j < 20; ++j) {
+    const double x2 = gauss_laguerre_points[j];
+    const double w2 = gauss_laguerre_weights[j];
+    const double t2 = 0.5 * theta * x2 + tau2;
+
     const auto gene_probs = density_fn(tau2, t2);
-    const double weight = f2(theta, tau2, t2, tau1, tau2) * h2;
+    const double weight = inv_theta_2 * w2;
     for (size_t a = 0; a < 4; ++a) {
       for (size_t b = 0; b < 4; ++b) {
         for (size_t c = 0; c < 4; ++c) {
@@ -603,14 +627,21 @@ inline std::array<double, 64> second_density_integral_derivative_t1_fixed_cpt_im
           const size_t j = site_pattern_index(a, c, b);
           const size_t k = site_pattern_index(b, c, a);
 
-          const double term = (gene_probs[i] + gene_probs[j] + gene_probs[k]) * weight - compensation[i];
+          const double term =
+              (gene_probs[i] + gene_probs[j] + gene_probs[k]) * weight - compensation[i];
           const double new_sum = partial_species_site_pattern_prob_deriv[i] + term;
           compensation[i] = (new_sum - partial_species_site_pattern_prob_deriv[i]) - term;
           partial_species_site_pattern_prob_deriv[i] = new_sum;
         }
-      } 
+      }
     }
   }
+
+  const double base_scale = exp(-inv_theta_2 * (tau2 - tau1));
+  for (size_t idx = 0; idx < 64; ++idx) {
+    partial_species_site_pattern_prob_deriv[idx] *= base_scale;
+  }
+
   return partial_species_site_pattern_prob_deriv;
 }
 
@@ -620,13 +651,11 @@ inline std::array<double, 64> second_density_integral_derivative_t1_fixed_cpt(
     const std::array<double, 4>& pis,
     const std::array<double, 6>& ss,
     const double theta,
-    const std::array<double, 2>& tau_branch_lengths,
-    const double max_branch_length = 20.0) {
+    const std::array<double, 2>& tau_branch_lengths) {
   return detail::second_density_integral_derivative_t1_fixed_cpt_impl(
       [&](double t1, double t2) { return compute_gtr_triplet_gene_density(pis, ss, {t1, t2}); },
       theta,
-      tau_branch_lengths,
-      max_branch_length);
+      tau_branch_lengths);
 }
 
 inline std::array<double, 64> second_density_integral_derivative_t1_fixed_cpt(
@@ -634,31 +663,38 @@ inline std::array<double, 64> second_density_integral_derivative_t1_fixed_cpt(
     const Eigen::Matrix4d& right,
     const Eigen::Vector4d& evals,
     const double theta,
-    const std::array<double, 2>& tau_branch_lengths,
-    const double max_branch_length = 20.0) {
+    const std::array<double, 2>& tau_branch_lengths) {
   return detail::second_density_integral_derivative_t1_fixed_cpt_impl(
       [&](double t1, double t2) {
         return compute_gtr_triplet_gene_density(left, right, evals, {t1, t2});
       },
       theta,
-      tau_branch_lengths,
-      max_branch_length);
+      tau_branch_lengths);
 }
-
-
 
 inline std::array<double, 64> compute_gtr_triplet_species_site_pattern_probs(
     const std::array<double, 4>& pis,
     const std::array<double, 6>& ss,
     const double theta,
     const std::array<double, 2>& tau_branch_lengths) {
+  const double tau2 = tau_branch_lengths[1];
+
   auto first_integral = first_density_integral(pis, ss, theta, tau_branch_lengths);
   auto second_integral = second_density_integral(pis, ss, theta, tau_branch_lengths);
+
+  double total_prob = 0.0;
 
   std::array<double, 64> species_site_pattern_probs;
   for (size_t i = 0; i < 64; ++i) {
     species_site_pattern_probs[i] = first_integral[i] + second_integral[i];
+    total_prob += species_site_pattern_probs[i];
   }
+
+  // Normalize the probabilities to sum to 1. (to deal with numerical integration error)
+  for (size_t i = 0; i < 64; ++i) {
+    species_site_pattern_probs[i] /= total_prob;
+  }
+
   return species_site_pattern_probs;
 }
 
@@ -677,11 +713,11 @@ combine_tau_deriv_integrals(const std::array<double, 64>& first_density_integral
   const double inv_theta_2 = 2.0 / theta;
   for (size_t i = 0; i < 64; ++i) {
     probs[i] = first_density_integral[i] + second_density_integral[i];
-    tau1_deriv[i] = inv_theta_2 * first_density_integral[i] -
-                    2 * inv_theta_2 * second_density_integral[i] - first_di_deriv_t1_fixed_cpt[i];
-    tau2_deriv[i] = inv_theta_2 * first_density_integral[i] +
-                    2 * inv_theta_2 * second_density_integral[i] + first_di_deriv_t1_fixed_cpt[i] -
-                    first_di_deriv_t2_fixed_cpt[i] - second_di_deriv_t1_fixed_cpt[i];
+    tau1_deriv[i] = -inv_theta_2 * first_density_integral[i] - first_di_deriv_t1_fixed_cpt[i] +
+                    inv_theta_2 * second_density_integral[i];
+    tau2_deriv[i] = inv_theta_2 * first_density_integral[i] - first_di_deriv_t2_fixed_cpt[i] +
+                    first_di_deriv_t1_fixed_cpt[i] + 2 * inv_theta_2 * second_density_integral[i] -
+                    second_di_deriv_t1_fixed_cpt[i];
   }
   return std::make_tuple(probs, tau1_deriv, tau2_deriv);
 }
@@ -694,6 +730,7 @@ compute_gtr_triplet_species_site_pattern_probs_with_tau_derivs(
     const std::array<double, 6>& ss,
     const double theta,
     const std::array<double, 2>& tau_branch_lengths) {
+  const double tau2 = tau_branch_lengths[1];
   return detail::combine_tau_deriv_integrals(
       first_density_integral(pis, ss, theta, tau_branch_lengths),
       first_density_integral_derivative_t1_fixed_cpt(pis, ss, theta, tau_branch_lengths),
@@ -710,12 +747,14 @@ compute_gtr_triplet_species_site_pattern_probs_with_tau_derivs(
     const Eigen::Vector4d& evals,
     const double theta,
     const std::array<double, 2>& tau_branch_lengths) {
+  const double tau2 = tau_branch_lengths[1];
   return detail::combine_tau_deriv_integrals(
       first_density_integral(left, right, evals, theta, tau_branch_lengths),
       first_density_integral_derivative_t1_fixed_cpt(left, right, evals, theta, tau_branch_lengths),
       first_density_integral_derivative_t2_fixed_cpt(left, right, evals, theta, tau_branch_lengths),
       second_density_integral(left, right, evals, theta, tau_branch_lengths),
-      second_density_integral_derivative_t1_fixed_cpt(left, right, evals, theta, tau_branch_lengths),
+      second_density_integral_derivative_t1_fixed_cpt(
+          left, right, evals, theta, tau_branch_lengths),
       theta);
 }
 
@@ -727,10 +766,15 @@ inline double compute_gtr_triplet_log_likelihood(const std::array<double, 64>& s
   auto species_site_pattern_probs =
       compute_gtr_triplet_species_site_pattern_probs(pis, ss, theta, tau_branch_lengths);
 
+  double scale = 0.0;
+  for (size_t i = 0; i < 64; ++i) {
+    scale += site_patterns[i];
+  }
+
   double log_likelihood = 0.0;
   for (size_t i = 0; i < 64; ++i) {
     if (site_patterns[i] > 0.0) {
-      log_likelihood += site_patterns[i] * log(species_site_pattern_probs[i]);
+      log_likelihood += (site_patterns[i] / scale) * log(species_site_pattern_probs[i]);
     }
   }
   return log_likelihood;
@@ -746,14 +790,20 @@ inline std::array<double, 3> accumulate_ll_with_tau_derivs(
   double log_likelihood = 0.0;
   double tau1_deriv = 0.0;
   double tau2_deriv = 0.0;
+
+  double scale = 0.0;
   for (size_t i = 0; i < 64; ++i) {
-    if (site_patterns[i] > 0.0) {
-      log_likelihood += site_patterns[i] * log(probs[i]);
-      if (probs[i] > 0.0) {
-        // logarithmic derivatives
-        tau1_deriv += site_patterns[i] * tau1_deriv_probs[i] / probs[i];
-        tau2_deriv += site_patterns[i] * tau2_deriv_probs[i] / probs[i];
-      }
+    scale += site_patterns[i];
+  }
+
+  for (size_t i = 0; i < 64; ++i) {
+    if (site_patterns[i] > 0.0 && probs[i] > 0.0) {
+      const double scaled_site_pattern_count = site_patterns[i];  // / scale;
+
+      log_likelihood += scaled_site_pattern_count * log(probs[i]);
+      // logarithmic derivatives
+      tau1_deriv += scaled_site_pattern_count * tau1_deriv_probs[i] / probs[i];
+      tau2_deriv += scaled_site_pattern_count * tau2_deriv_probs[i] / probs[i];
     }
   }
   return {log_likelihood, tau1_deriv, tau2_deriv};
@@ -811,64 +861,126 @@ class SpeciesTripletGTRNegLogLikelihoodJointObjective {
 
     double rate;
     std::array<double, 6> normalized_ss;
-    std::tie(rate, normalized_ss) = normalize_gtr_params(pis_, ss);
+    std::tie(rate, normalized_ss) = normalize_gtr_params(pis_, ss, mu_);
 
     // const double fx = -compute_gtr_triplet_log_likelihood(
     //                       site_patterns_, pis_, normalized_ss, theta_, {tau1, tau2}) +
     //                   pow(rate - mu_, 2);
 
-    auto fx_and_derivs = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+    auto ll_and_derivs = compute_gtr_triplet_log_likelihood_with_tau_derivs(
         site_patterns_, pis_, normalized_ss, theta_, {tau1, tau2});
-    const double fx = -fx_and_derivs[0] + pow(rate - mu_, 2);
-    const double fx_tau1_deriv = -fx_and_derivs[1];
-    const double fx_tau2_deriv = -fx_and_derivs[2];
+    const double nll = -ll_and_derivs[0] + pow(rate - mu_, 2);
+    const double nll_tau1_deriv = -ll_and_derivs[1];
+    const double nll_tau2_deriv = -ll_and_derivs[2];
 
+    std::cout.setf(std::ios::fixed);
+    std::cout.precision(10);
     std::cout << "Current parameters: tau1=" << tau1 << ", tau2=" << tau2
               << ", ss=" << normalized_ss[0] << "," << normalized_ss[1] << "," << normalized_ss[2]
               << "," << normalized_ss[3] << "," << normalized_ss[4] << "," << normalized_ss[5]
               << " with neg log likelihood ";
-    std::cout.setf(std::ios::fixed);
-    std::cout.precision(10);
-    std::cout << (-fx) << std::endl;
+    std::cout << nll << std::endl;
+
+    const double h0 = std::min(1e-6, x[0]) / 3;
+    const double h1 = std::min(1e-6, x[1]) / 3;
+
+    auto ll_and_derivs_x0_2plus = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+        site_patterns_, pis_, normalized_ss, theta_, {tau1 + 2 * h0, tau2 + 2 * h0});
+    const double nll_x0_2plus = -ll_and_derivs_x0_2plus[0];
+
+    auto ll_and_derivs_x0_plus = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+        site_patterns_, pis_, normalized_ss, theta_, {tau1 + h0, tau2 + h0});
+    const double nll_x0_plus = -ll_and_derivs_x0_plus[0];
+
+    auto ll_and_derivs_x0_minus = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+        site_patterns_, pis_, normalized_ss, theta_, {tau1 - h0, tau2 - h0});
+    const double nll_x0_minus = -ll_and_derivs_x0_minus[0];
+
+    auto ll_and_derivs_x0_2minus = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+        site_patterns_, pis_, normalized_ss, theta_, {tau1 - 2 * h0, tau2 - 2 * h0});
+    const double nll_x0_2minus = -ll_and_derivs_x0_2minus[0];
+
+    auto ll_and_derivs_x1_2plus = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+        site_patterns_, pis_, normalized_ss, theta_, {tau1, tau2 + 2 * h1});
+    const double nll_x1_2plus = -ll_and_derivs_x1_2plus[0];
+
+    auto ll_and_derivs_x1_plus = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+        site_patterns_, pis_, normalized_ss, theta_, {tau1, tau2 + h1});
+    const double nll_x1_plus = -ll_and_derivs_x1_plus[0];
+
+    auto ll_and_derivs_x1_minus = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+        site_patterns_, pis_, normalized_ss, theta_, {tau1, tau2 - h1});
+    const double nll_x1_minus = -ll_and_derivs_x1_minus[0];
+
+    auto ll_and_derivs_x1_2minus = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+        site_patterns_, pis_, normalized_ss, theta_, {tau1, tau2 - 2 * h1});
+    const double nll_x1_2minus = -ll_and_derivs_x1_2minus[0];
 
     grad.resize(8);
 
     // as tau1 = x[0] and tau2 = x[0] + x[1]
-    grad[0] = fx_tau1_deriv + fx_tau2_deriv;
-    grad[1] = fx_tau2_deriv;
+    // grad[0] = nll_tau1_deriv + nll_tau2_deriv;
+    // grad[1] = nll_tau2_deriv;
 
-    std::cout << "Gradient w.r.t. tau1: " << fx_tau1_deriv << std::endl;
+    grad[0] = (-nll_x0_2plus + 8 * nll_x0_plus - 8 * nll_x0_minus + nll_x0_2minus) / (12 * h0);
+    grad[1] = (-nll_x1_2plus + 8 * nll_x1_plus - 8 * nll_x1_minus + nll_x1_2minus) / (12 * h1);
+
+    std::cout << "Gradient w.r.t. tau1: " << nll_tau1_deriv << std::endl;
     std::cout << "Gradient w.r.t. x[0] (tau1&tau2): " << grad[0] << std::endl;
     std::cout << "Gradient w.r.t. x[1] (tau2): " << grad[1] << std::endl;
 
+    const double epsilon = 0.01;
+
     for (size_t i = 0; i < 6; ++i) {
       std::array<double, 6> ss_plus = ss;
-      ss_plus[i] += 0.001;
+      ss_plus[i] += epsilon;
 
       double ss_plus_rate;
       std::array<double, 6> normalized_ss_plus;
-      std::tie(ss_plus_rate, normalized_ss_plus) = normalize_gtr_params(pis_, ss_plus);
+      std::tie(ss_plus_rate, normalized_ss_plus) = normalize_gtr_params(pis_, ss_plus, mu_);
 
-      const auto fx_ss_plus = -compute_gtr_triplet_log_likelihood(
-                                  site_patterns_, pis_, normalized_ss_plus, theta_, {tau1, tau2}) +
-                              pow(ss_plus_rate - mu_, 2);
+      std::cout << "normalized ss plus: ";
+      for (size_t j = 0; j < 6; ++j) {
+        std::cout << normalized_ss_plus[j] << " ";
+      }
+      std::cout << std::endl;
+
+      const auto nll_ss_plus = -compute_gtr_triplet_log_likelihood(
+                                   site_patterns_, pis_, normalized_ss_plus, theta_, {tau1, tau2}) +
+                               pow(ss_plus_rate - mu_, 2);
 
       std::array<double, 6> ss_minus = ss;
-      ss_minus[i] = std::max(0.0, ss_minus[i] - 0.001);
+      ss_minus[i] = std::max(0.0, ss_minus[i] - epsilon);
 
       double ss_minus_rate;
       std::array<double, 6> normalized_ss_minus;
-      std::tie(ss_minus_rate, normalized_ss_minus) = normalize_gtr_params(pis_, ss_minus);
+      std::tie(ss_minus_rate, normalized_ss_minus) = normalize_gtr_params(pis_, ss_minus, mu_);
 
-      const auto fx_ss_minus =
+      std::cout << "normalized ss minus: ";
+      for (size_t j = 0; j < 6; ++j) {
+        std::cout << normalized_ss_minus[j] << " ";
+      }
+      std::cout << std::endl;
+
+      const auto nll_ss_minus =
           -compute_gtr_triplet_log_likelihood(
               site_patterns_, pis_, normalized_ss_minus, theta_, {tau1, tau2}) +
           pow(ss_minus_rate - mu_, 2);
 
-      grad[2 + i] = (fx_ss_plus - fx_ss_minus) / (ss_plus[i] - ss_minus[i]);
+      std::cout << "Gradient w.r.t. ss[" << i << "]: (" << nll_ss_plus << "-" << nll_ss_minus << ")"
+                << "/ (" << ss_plus[i] << "-" << ss_minus[i]
+                << ") = " << (nll_ss_plus - nll_ss_minus) / (ss_plus[i] - ss_minus[i]) << std::endl;
+
+      grad[2 + i] = (nll_ss_plus - nll_ss_minus) / (ss_plus[i] - ss_minus[i]);
     }
 
-    return fx;
+    std::cout << "Gradient w.r.t. ss: ";
+    for (size_t i = 0; i < 6; ++i) {
+      std::cout << grad[2 + i] << " ";
+    }
+    std::cout << std::endl;
+
+    return nll;
   }
 };
 
@@ -894,7 +1006,7 @@ class SpeciesTripletGTRNegLogLikelihoodBranchLengthObjective {
       : site_patterns_(site_patterns), pis_(pis), ss_(ss), theta_(theta), mu_(mu) {
     double rate;
     std::array<double, 6> normalized_ss;
-    std::tie(rate, normalized_ss) = normalize_gtr_params(pis_, ss);
+    std::tie(rate, normalized_ss) = normalize_gtr_params(pis_, ss_, mu_);
     normalized_ss_ = normalized_ss;
 
     std::tie(left_, right_, evals_) = compute_decomposition(pis_, normalized_ss_);
@@ -904,28 +1016,66 @@ class SpeciesTripletGTRNegLogLikelihoodBranchLengthObjective {
     const double tau1 = x[0];
     const double tau2 = x[0] + x[1];
 
-    auto fx_and_derivs = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+    auto ll_and_derivs = compute_gtr_triplet_log_likelihood_with_tau_derivs(
         site_patterns_, left_, right_, evals_, theta_, {tau1, tau2});
-    const double fx = -fx_and_derivs[0];
-    const double fx_tau1_deriv = -fx_and_derivs[1];
-    const double fx_tau2_deriv = -fx_and_derivs[2];
+    const double nll = -ll_and_derivs[0];
+    const double nll_tau1_deriv = -ll_and_derivs[1];
+    const double nll_tau2_deriv = -ll_and_derivs[2];
+
+    const double h0 = std::min(1e-6, x[0]) / 3;
+    const double h1 = std::min(1e-6, x[1]) / 3;
+
+    auto ll_and_derivs_x0_2plus = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+        site_patterns_, left_, right_, evals_, theta_, {tau1 + 2 * h0, tau2 + 2 * h0});
+    const double nll_x0_2plus = -ll_and_derivs_x0_2plus[0];
+
+    auto ll_and_derivs_x0_plus = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+        site_patterns_, left_, right_, evals_, theta_, {tau1 + h0, tau2 + h0});
+    const double nll_x0_plus = -ll_and_derivs_x0_plus[0];
+
+    auto ll_and_derivs_x0_minus = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+        site_patterns_, left_, right_, evals_, theta_, {tau1 - h0, tau2 - h0});
+    const double nll_x0_minus = -ll_and_derivs_x0_minus[0];
+
+    auto ll_and_derivs_x0_2minus = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+        site_patterns_, left_, right_, evals_, theta_, {tau1 - 2 * h0, tau2 - 2 * h0});
+    const double nll_x0_2minus = -ll_and_derivs_x0_2minus[0];
+
+    auto ll_and_derivs_x1_2plus = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+        site_patterns_, left_, right_, evals_, theta_, {tau1, tau2 + 2 * h1});
+    const double nll_x1_2plus = -ll_and_derivs_x1_2plus[0];
+
+    auto ll_and_derivs_x1_plus = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+        site_patterns_, left_, right_, evals_, theta_, {tau1, tau2 + h1});
+    const double nll_x1_plus = -ll_and_derivs_x1_plus[0];
+
+    auto ll_and_derivs_x1_minus = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+        site_patterns_, left_, right_, evals_, theta_, {tau1, tau2 - h1});
+    const double nll_x1_minus = -ll_and_derivs_x1_minus[0];
+
+    auto ll_and_derivs_x1_2minus = compute_gtr_triplet_log_likelihood_with_tau_derivs(
+        site_patterns_, left_, right_, evals_, theta_, {tau1, tau2 - 2 * h1});
+    const double nll_x1_2minus = -ll_and_derivs_x1_2minus[0];
+
+    grad.resize(2);
+
+    // as tau1 = x[0] and tau2 = x[0] + x[1]
+    // grad[0] = nll_tau1_deriv + nll_tau2_deriv;
+    // grad[1] = nll_tau2_deriv;
+
+    grad[0] = (-nll_x0_2plus + 8 * nll_x0_plus - 8 * nll_x0_minus + nll_x0_2minus) / (12 * h0);
+    grad[1] = (-nll_x1_2plus + 8 * nll_x1_plus - 8 * nll_x1_minus + nll_x1_2minus) / (12 * h1);
 
     std::cout.setf(std::ios::fixed);
     std::cout.precision(10);
     std::cout << "Current parameters: tau1=" << tau1 << ", tau2=" << tau2
-              << " with neg log likelihood ";
-    std::cout << (-fx) << std::endl;
-
-    grad.resize(2);
-
-    // as tau1 = x[0] and tau2 = x[0] + x[1] (and it's a _negative_ log likelihood)
-    grad[0] = -fx_tau1_deriv - fx_tau2_deriv;
-    grad[1] = -fx_tau2_deriv;
-
+              << " with neg log likelihood " << nll << std::endl;
+    std::cout << "Gradient w.r.t. tau1: " << nll_tau1_deriv << std::endl;
+    std::cout << "Gradient w.r.t. tau2: " << nll_tau2_deriv << std::endl;
     std::cout << "Gradient w.r.t. x[0] (tau1&tau2): " << grad[0] << std::endl;
     std::cout << "Gradient w.r.t. x[1] (tau2): " << grad[1] << std::endl;
 
-    return fx;
+    return nll;
   }
 };
 
@@ -967,7 +1117,7 @@ inline std::array<double, 64> permute_triplet_site_patterns(const TuplePatterns&
  */
 inline std::array<double, 3> compute_gtr_triplet_weights(const TuplePatterns& site_patterns,
                                                          const double theta,
-                                                         const double mu = 1.0) {
+                                                         const double mu = 4.0 / 3.0) {
   const double n = site_patterns.n_counted;
   if (n == 0.0) {
     // TODO: warn when no sites are counted.
@@ -996,13 +1146,13 @@ inline std::array<double, 3> compute_gtr_triplet_weights(const TuplePatterns& si
     const std::array<double, 64> tree_permuted_site_patterns =
         permute_triplet_site_patterns(site_patterns, i);
 
-    double tau1_init = 1.0;
-    double tau2_init = 2.0;
+    double tau1_init = 5.0;
+    double tau2_init = 10.0;
     const std::array<double, 6> ss_init = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
 
     double rate;
     std::array<double, 6> normalized_ss_init;
-    std::tie(rate, normalized_ss_init) = normalize_gtr_params(pis, ss_init);
+    std::tie(rate, normalized_ss_init) = normalize_gtr_params(pis, ss_init, mu);
 
     const double init_neg_ll =
         -compute_gtr_triplet_log_likelihood(
@@ -1026,7 +1176,8 @@ inline std::array<double, 3> compute_gtr_triplet_weights(const TuplePatterns& si
 
     Eigen::VectorXd lb_branch_length(2), ub_branch_length(2);
     lb_branch_length << 1e-6, 1e-6;
-    ub_branch_length << 50.0, 50.0;  // TODO: determine reasonable upper bounds
+    ub_branch_length << std::numeric_limits<double>::infinity(),
+        std::numeric_limits<double>::infinity();  // TODO: determine reasonable upper bounds
 
     Eigen::VectorXd x_branch_length(2);
     x_branch_length << tau1_init, tau2_init - tau1_init;
@@ -1037,6 +1188,10 @@ inline std::array<double, 3> compute_gtr_triplet_weights(const TuplePatterns& si
 
       tau1_init = x_branch_length[0];
       tau2_init = x_branch_length[0] + x_branch_length[1];
+
+      std::cout << "Initial branch length optimization complete. Optimized tau1: " << tau1_init
+                << ", tau2: " << tau2_init << " with neg log likelihood " << fx << std::endl;
+
     } catch (const std::exception&) {
       // If L-BFGS-B fails, keep the initial guess.
       if (fx < init_neg_ll) {
@@ -1048,6 +1203,10 @@ inline std::array<double, 3> compute_gtr_triplet_weights(const TuplePatterns& si
         fx = init_neg_ll;
       }
     }
+
+    std::string s;
+    std::getline(std::cin, s);
+    // exit(0);
 
     /* ********** ********** ********** ********** */
     /* Joint branch length and parameter optimization */
@@ -1075,6 +1234,12 @@ inline std::array<double, 3> compute_gtr_triplet_weights(const TuplePatterns& si
 
     try {
       solver_joint.minimize(joint_objective, x, fx, lb_joint, ub_joint);
+
+      std::cout << "Joint optimization complete. Optimized parameters: tau1: " << x[0]
+                << ", tau2: " << x[0] + x[1] << ", ss: " << x[2] << "," << x[3] << "," << x[4]
+                << "," << x[5] << "," << x[6] << "," << x[7] << " with neg log likelihood " << fx
+                << std::endl;
+
     } catch (const std::exception&) {
       // If L-BFGS-B fails, keep the initial guess.
       if (fx < init_neg_ll) {
@@ -1087,7 +1252,10 @@ inline std::array<double, 3> compute_gtr_triplet_weights(const TuplePatterns& si
       }
     }
 
-    weights[i] = -fx;
+    std::getline(std::cin, s);
+    // exit(0);
+
+    weights[i] = fx;
   }
 
   return weights;

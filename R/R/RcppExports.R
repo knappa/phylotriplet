@@ -351,3 +351,55 @@ gene_nucleotide_frequencies_rcpp <- function(gene_ptr) {
     .Call(`_phylotriplet_gene_nucleotide_frequencies_rcpp`, gene_ptr)
 }
 
+#' Compute JC69 species tree triplet topology weights (multi-gene, internal)
+#'
+#' @param aln_ptr External pointer from read_nexus_rcpp / read_phylip_files_rcpp
+#' @param taxon1,taxon2,taxon3 Taxon names (any order)
+#' @param theta Population-scaled mutation rate parameter
+#' @param mu JC69 branch-length scaling (default 4/3)
+#' @return Numeric vector of length 3: weights for the three rooted triplet
+#'   topologies (ab|c, ac|b, bc|a where a,b,c are the sorted taxon names)
+#' @keywords internal
+compute_jc69_species_triplet_weights_rcpp <- function(aln_ptr, taxon1, taxon2, taxon3, theta, mu = 4.0/3.0) {
+    .Call(`_phylotriplet_compute_jc69_species_triplet_weights_rcpp`, aln_ptr, taxon1, taxon2, taxon3, theta, mu)
+}
+
+#' Compute K2P species tree triplet topology weights (multi-gene, internal)
+#'
+#' @param aln_ptr External pointer from read_alignment_rcpp
+#' @param taxon1,taxon2,taxon3 Taxon names (any order)
+#' @param theta Population-scaled mutation rate parameter
+#' @param mu K2P total substitution rate alpha+2*beta (default 4/3)
+#' @return Numeric vector of length 3: weights for the three rooted triplet
+#'   topologies (ab|c, ac|b, bc|a where a,b,c are the sorted taxon names)
+#' @keywords internal
+compute_k2p_species_triplet_weights_rcpp <- function(aln_ptr, taxon1, taxon2, taxon3, theta, mu = 4.0/3.0) {
+    .Call(`_phylotriplet_compute_k2p_species_triplet_weights_rcpp`, aln_ptr, taxon1, taxon2, taxon3, theta, mu)
+}
+
+#' Compute JC69 species tree triplet topology weights (single gene, internal)
+#'
+#' @param gene_ptr External pointer from get_gene_rcpp
+#' @param taxon1,taxon2,taxon3 Taxon names (any order)
+#' @param theta Population-scaled mutation rate parameter
+#' @param mu JC69 branch-length scaling (default 4/3)
+#' @return Numeric vector of length 3: weights for the three rooted triplet
+#'   topologies (ab|c, ac|b, bc|a where a,b,c are the sorted taxon names)
+#' @keywords internal
+gene_compute_jc69_species_triplet_weights_rcpp <- function(gene_ptr, taxon1, taxon2, taxon3, theta, mu = 4.0/3.0) {
+    .Call(`_phylotriplet_gene_compute_jc69_species_triplet_weights_rcpp`, gene_ptr, taxon1, taxon2, taxon3, theta, mu)
+}
+
+#' Compute K2P species tree triplet topology weights (single gene, internal)
+#'
+#' @param gene_ptr External pointer from get_gene_rcpp
+#' @param taxon1,taxon2,taxon3 Taxon names (any order)
+#' @param theta Population-scaled mutation rate parameter
+#' @param mu K2P total substitution rate alpha+2*beta (default 4/3)
+#' @return Numeric vector of length 3: weights for the three rooted triplet
+#'   topologies (ab|c, ac|b, bc|a where a,b,c are the sorted taxon names)
+#' @keywords internal
+gene_compute_k2p_species_triplet_weights_rcpp <- function(gene_ptr, taxon1, taxon2, taxon3, theta, mu = 4.0/3.0) {
+    .Call(`_phylotriplet_gene_compute_k2p_species_triplet_weights_rcpp`, gene_ptr, taxon1, taxon2, taxon3, theta, mu)
+}
+

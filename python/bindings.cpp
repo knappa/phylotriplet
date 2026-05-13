@@ -4,6 +4,7 @@
 
 #define PHYLOTRIPLET_PY_WARNINGS
 #include "phylotriplet/file_io.hpp"
+#include "phylotriplet/species_tree_jc69.hpp"
 #include "phylotriplet/sequence_analysis.hpp"
 #include "phylotriplet/sequence_io.hpp"
 #include "phylotriplet/triplet_estimator.hpp"
@@ -170,8 +171,37 @@ PYBIND11_MODULE(phylotriplet, m) {
           py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
           py::arg("theta"),
           "JC69 weights for the three rooted triplet topologies.\n\n"
-          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where a, b, c\n"
-          "are the taxon names.")
+          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where\n"
+          "a=taxon1, b=taxon2, c=taxon3.")
+      .def(
+          "compute_jc69_species_triplet_weights",
+          [](const GeneAlignment& gene, const std::string& t1,
+             const std::string& t2, const std::string& t3, double theta,
+             double mu) {
+            auto w = compute_jc69_species_triplet_weights(gene, t1, t2, t3, theta, mu);
+            return std::vector<double>{w[0], w[1], w[2]};
+          },
+          py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
+          py::arg("theta"), py::arg("mu") = 4.0 / 3.0,
+          "JC69 species tree weights for three rooted triplet topologies.\n\n"
+          "Uses the multispecies coalescent + JC69 model.\n\n"
+          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where\n"
+          "a=taxon1, b=taxon2, c=taxon3.")
+      .def(
+          "compute_k2p_species_triplet_weights",
+          [](const GeneAlignment& gene, const std::string& t1,
+             const std::string& t2, const std::string& t3, double theta,
+             double mu) {
+            auto w = compute_k2p_species_triplet_weights(gene, t1, t2, t3, theta, mu);
+            return std::vector<double>{w[0], w[1], w[2]};
+          },
+          py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
+          py::arg("theta"), py::arg("mu") = 4.0 / 3.0,
+          "K2P species tree weights for three rooted triplet topologies.\n\n"
+          "Uses the multispecies coalescent + K2P model.  Estimates alpha\n"
+          "and beta via MLE subject to alpha+2*beta=mu.\n\n"
+          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where\n"
+          "a=taxon1, b=taxon2, c=taxon3.")
       .def(
           "compute_gtr_triplet_weights",
           [](const GeneAlignment& gene, const std::string& t1,
@@ -182,8 +212,8 @@ PYBIND11_MODULE(phylotriplet, m) {
           py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
           py::arg("theta"), py::arg("mu") = 1.0,
           "GTR weights for the three rooted triplet topologies.\n\n"
-          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where a, b, c\n"
-          "are the taxon names.")
+          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where\n"
+          "a=taxon1, b=taxon2, c=taxon3.")
       .def(
           "compute_triplet_weights",
           [](const GeneAlignment& gene, const std::string& t1,
@@ -318,8 +348,39 @@ PYBIND11_MODULE(phylotriplet, m) {
           py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
           py::arg("theta"),
           "JC69 weights for the three rooted triplet topologies.\n\n"
-          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where a, b, c\n"
-          "are the taxon names.  Genes that do not\n"
+          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where\n"
+          "a=taxon1, b=taxon2, c=taxon3.  Genes that do not\n"
+          "contain all three taxa are skipped with a warning.")
+      .def(
+          "compute_jc69_species_triplet_weights",
+          [](const MultiGeneAlignment& aln, const std::string& t1,
+             const std::string& t2, const std::string& t3, double theta,
+             double mu) {
+            auto w = compute_jc69_species_triplet_weights(aln, t1, t2, t3, theta, mu);
+            return std::vector<double>{w[0], w[1], w[2]};
+          },
+          py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
+          py::arg("theta"), py::arg("mu") = 4.0 / 3.0,
+          "JC69 species tree weights for three rooted triplet topologies.\n\n"
+          "Uses the multispecies coalescent + JC69 model.\n\n"
+          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where a=taxon1,\n"
+          "b=taxon2, c=taxon3.  Genes that do not\n"
+          "contain all three taxa are skipped with a warning.")
+      .def(
+          "compute_k2p_species_triplet_weights",
+          [](const MultiGeneAlignment& aln, const std::string& t1,
+             const std::string& t2, const std::string& t3, double theta,
+             double mu) {
+            auto w = compute_k2p_species_triplet_weights(aln, t1, t2, t3, theta, mu);
+            return std::vector<double>{w[0], w[1], w[2]};
+          },
+          py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
+          py::arg("theta"), py::arg("mu") = 4.0 / 3.0,
+          "K2P species tree weights for three rooted triplet topologies.\n\n"
+          "Uses the multispecies coalescent + K2P model.  Estimates alpha\n"
+          "and beta via MLE subject to alpha+2*beta=mu.\n\n"
+          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where a=taxon1,\n"
+          "b=taxon2, c=taxon3.  Genes that do not\n"
           "contain all three taxa are skipped with a warning.")
       .def(
           "compute_gtr_triplet_weights",
@@ -331,8 +392,8 @@ PYBIND11_MODULE(phylotriplet, m) {
           py::arg("taxon1"), py::arg("taxon2"), py::arg("taxon3"),
           py::arg("theta"), py::arg("mu") = 1.0,
           "GTR weights for the three rooted triplet topologies.\n\n"
-          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where a, b, c\n"
-          "are the taxon names.  Genes that do not\n"
+          "Returns a list of 3 floats [w_ab_c, w_ac_b, w_bc_a] where\n"
+          "a=taxon1, b=taxon2, c=taxon3.  Genes that do not\n"
           "contain all three taxa are skipped with a warning.")
       .def(
           "compute_triplet_weights",
@@ -440,4 +501,5 @@ PYBIND11_MODULE(phylotriplet, m) {
         "line)\n\n"
         "Returns:\n"
         "    str: Newick string of the estimated tree");
+
 }

@@ -1,6 +1,7 @@
 #include <Rcpp.h>
 #define PHYLOTRIPLET_RCPP_WARNINGS
 #include <phylotriplet/file_io.hpp>
+#include <phylotriplet/species_tree_jc69.hpp>
 #include <phylotriplet/sequence_analysis.hpp>
 #include <phylotriplet/sequence_io.hpp>
 #include <phylotriplet/triplet_estimator.hpp>
@@ -667,5 +668,105 @@ NumericVector gene_nucleotide_frequencies_rcpp(SEXP gene_ptr) {
   NumericVector out =
       NumericVector::create(Named("pi_A") = f[0], Named("pi_C") = f[1],
                             Named("pi_G") = f[2], Named("pi_T") = f[3]);
+  return out;
+}
+
+//' Compute JC69 species tree triplet topology weights (multi-gene, internal)
+//'
+//' @param aln_ptr External pointer from read_nexus_rcpp / read_phylip_files_rcpp
+//' @param taxon1,taxon2,taxon3 Taxon names (any order)
+//' @param theta Population-scaled mutation rate parameter
+//' @param mu JC69 branch-length scaling (default 4/3)
+//' @return Numeric vector of length 3: weights for the three rooted triplet
+//'   topologies (ab|c, ac|b, bc|a where a,b,c are the sorted taxon names)
+//' @keywords internal
+// [[Rcpp::export]]
+NumericVector compute_jc69_species_triplet_weights_rcpp(SEXP aln_ptr,
+                                                        std::string taxon1,
+                                                        std::string taxon2,
+                                                        std::string taxon3,
+                                                        double theta,
+                                                        double mu = 4.0/3.0) {
+  Rcpp::XPtr<MultiGeneAlignment> ptr(aln_ptr);
+  auto w = compute_jc69_species_triplet_weights(*ptr, taxon1, taxon2, taxon3, theta, mu);
+  NumericVector out(3);
+  out[0] = w[0];
+  out[1] = w[1];
+  out[2] = w[2];
+  return out;
+}
+
+//' Compute K2P species tree triplet topology weights (multi-gene, internal)
+//'
+//' @param aln_ptr External pointer from read_alignment_rcpp
+//' @param taxon1,taxon2,taxon3 Taxon names (any order)
+//' @param theta Population-scaled mutation rate parameter
+//' @param mu K2P total substitution rate alpha+2*beta (default 4/3)
+//' @return Numeric vector of length 3: weights for the three rooted triplet
+//'   topologies (ab|c, ac|b, bc|a where a,b,c are the sorted taxon names)
+//' @keywords internal
+// [[Rcpp::export]]
+NumericVector compute_k2p_species_triplet_weights_rcpp(SEXP aln_ptr,
+                                                       std::string taxon1,
+                                                       std::string taxon2,
+                                                       std::string taxon3,
+                                                       double theta,
+                                                       double mu = 4.0/3.0) {
+  Rcpp::XPtr<MultiGeneAlignment> ptr(aln_ptr);
+  auto w = compute_k2p_species_triplet_weights(*ptr, taxon1, taxon2, taxon3, theta, mu);
+  NumericVector out(3);
+  out[0] = w[0];
+  out[1] = w[1];
+  out[2] = w[2];
+  return out;
+}
+
+//' Compute JC69 species tree triplet topology weights (single gene, internal)
+//'
+//' @param gene_ptr External pointer from get_gene_rcpp
+//' @param taxon1,taxon2,taxon3 Taxon names (any order)
+//' @param theta Population-scaled mutation rate parameter
+//' @param mu JC69 branch-length scaling (default 4/3)
+//' @return Numeric vector of length 3: weights for the three rooted triplet
+//'   topologies (ab|c, ac|b, bc|a where a,b,c are the sorted taxon names)
+//' @keywords internal
+// [[Rcpp::export]]
+NumericVector gene_compute_jc69_species_triplet_weights_rcpp(SEXP gene_ptr,
+                                                             std::string taxon1,
+                                                             std::string taxon2,
+                                                             std::string taxon3,
+                                                             double theta,
+                                                             double mu = 4.0/3.0) {
+  Rcpp::XPtr<GeneAlignment> ptr(gene_ptr);
+  auto w = compute_jc69_species_triplet_weights(*ptr, taxon1, taxon2, taxon3, theta, mu);
+  NumericVector out(3);
+  out[0] = w[0];
+  out[1] = w[1];
+  out[2] = w[2];
+  return out;
+}
+
+//' Compute K2P species tree triplet topology weights (single gene, internal)
+//'
+//' @param gene_ptr External pointer from get_gene_rcpp
+//' @param taxon1,taxon2,taxon3 Taxon names (any order)
+//' @param theta Population-scaled mutation rate parameter
+//' @param mu K2P total substitution rate alpha+2*beta (default 4/3)
+//' @return Numeric vector of length 3: weights for the three rooted triplet
+//'   topologies (ab|c, ac|b, bc|a where a,b,c are the sorted taxon names)
+//' @keywords internal
+// [[Rcpp::export]]
+NumericVector gene_compute_k2p_species_triplet_weights_rcpp(SEXP gene_ptr,
+                                                            std::string taxon1,
+                                                            std::string taxon2,
+                                                            std::string taxon3,
+                                                            double theta,
+                                                            double mu = 4.0/3.0) {
+  Rcpp::XPtr<GeneAlignment> ptr(gene_ptr);
+  auto w = compute_k2p_species_triplet_weights(*ptr, taxon1, taxon2, taxon3, theta, mu);
+  NumericVector out(3);
+  out[0] = w[0];
+  out[1] = w[1];
+  out[2] = w[2];
   return out;
 }

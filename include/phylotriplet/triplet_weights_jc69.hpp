@@ -29,51 +29,50 @@ inline std::array<double, 4> compute_jc69_site_pattern_log_probs(const double ta
   const double log_beta = log(beta);
   const double log1p_beta = log1p(beta);
   const double log1p_2beta = log1p(2.0 * beta);
-  const double log1p_3beta = log1p(3.0 * beta);
 
   const double log_s_xxx =
-      -2 * tau1 - 2 * tau2 - 6 * log(2) - log(2 * beta + 1) - log(beta + 1) +
-      log_sum_exp(std::array<double, 8>{2 * tau1 + 2 * tau2 + log(2) + 2 * log(beta),
-                                        2 * tau1 + 2 * tau2 + log(3) + log(beta),
-                                        2 * tau1 + log(12) + 2 * log(beta),
-                                        2 * tau2 + log(6) + 2 * log(beta),
-                                        2 * tau1 + 2 * tau2,
-                                        tau1 + log(12) + 2 * log(beta),
-                                        2 * tau1 + log(6) + log(beta),
-                                        2 * tau2 + log(3) + log(beta)});
+      -2 * tau1t - 2 * tau2t - 6 * log(2) - log1p_2beta - log1p_beta +
+      log_sum_exp(std::array<double, 8>{2 * tau1t + 2 * tau2t + log(2) + 2 * log_beta,
+                                        2 * tau1t + 2 * tau2t + log(3) + log_beta,
+                                        2 * tau1t + log(12) + 2 * log_beta,
+                                        2 * tau2t + log(6) + 2 * log_beta,
+                                        2 * tau1t + 2 * tau2t,
+                                        tau1t + log(12) + 2 * log_beta,
+                                        2 * tau1t + log(6) + log_beta,
+                                        2 * tau2t + log(3) + log_beta});
 
   const double log_s_xxy =
-      -2 * tau1 - 2 * tau2 - 6 * log(2) - log(2 * beta + 1) - log(beta + 1) +
-      log_diff_exp(log_sum_exp(std::array<double, 5>{2 * tau1 + 2 * tau2 + log(2) + 2 * log(beta),
-                                                     2 * tau1 + 2 * tau2 + log(3) + log(beta),
-                                                     2 * tau2 + log(6) + 2 * log(beta),
-                                                     2 * tau1 + 2 * tau2,
-                                                     2 * tau2 + log(3) + log(beta)}),
-                   log_sum_exp(std::array<double, 3>{2 * tau1 + 2 * log(2) + 2 * log(beta),
-                                                     tau1 + 2 * log(2) + 2 * log(beta),
-                                                     2 * tau1 + log(2) + log(beta)}));
+      -2 * tau1t - 2 * tau2t - 6 * log(2) - log1p_2beta - log1p_beta +
+      log_diff_exp(log_sum_exp(std::array<double, 5>{2 * tau1t + 2 * tau2t + log(2) + 2 * log_beta,
+                                                     2 * tau1t + 2 * tau2t + log(3) + log_beta,
+                                                     2 * tau2t + log(6) + 2 * log_beta,
+                                                     2 * tau1t + 2 * tau2t,
+                                                     2 * tau2t + log(3) + log_beta}),
+                   log_sum_exp(std::array<double, 3>{2 * tau1t + 2 * log(2) + 2 * log_beta,
+                                                     tau1t + 2 * log(2) + 2 * log_beta,
+                                                     2 * tau1t + log(2) + log_beta}));
 
   const double log_s_xyx =
-      -2 * tau1 - 2 * tau2 - 6 * log(2) - log(2 * beta + 1) - log(beta + 1) +
-      log_diff_exp(log_sum_exp(std::array<double, 5>{2 * tau1 + 2 * tau2 + log(2) + 2 * log(beta),
-                                                     2 * tau1 + 2 * tau2 + log(3) + log(beta),
-                                                     2 * tau1 + 2 * log(2) + 2 * log(beta),
-                                                     2 * tau1 + 2 * tau2,
-                                                     2 * tau1 + log(2) + log(beta)}),
-                   log_sum_exp(std::array<double, 3>{2 * tau2 + log(2) + 2 * log(beta),
-                                                     tau1 + 2 * log(2) + 2 * log(beta),
-                                                     2 * tau2 + log(beta)}));
+      -2 * tau1t - 2 * tau2t - 6 * log(2) - log1p_2beta - log1p_beta +
+      log_diff_exp(log_sum_exp(std::array<double, 5>{2 * tau1t + 2 * tau2t + log(2) + 2 * log_beta,
+                                                     2 * tau1t + 2 * tau2t + log(3) + log_beta,
+                                                     2 * tau1t + 2 * log(2) + 2 * log_beta,
+                                                     2 * tau1t + 2 * tau2t,
+                                                     2 * tau1t + log(2) + log_beta}),
+                   log_sum_exp(std::array<double, 3>{2 * tau2t + log(2) + 2 * log_beta,
+                                                     tau1t + 2 * log(2) + 2 * log_beta,
+                                                     2 * tau2t + log_beta}));
 
   const double log_s_xyz =
-      -2 * tau1 - 2 * tau2 - 6 * log(2) - log(2 * beta + 1) - log(beta + 1) +
-      log_diff_exp(log_sum_exp(std::array<double, 4>{2 * tau1 + 2 * tau2 + log(2) + 2 * log(beta),
-                                                     2 * tau1 + 2 * tau2 + log(3) + log(beta),
-                                                     2 * tau1 + 2 * tau2,
-                                                     tau1 + 2 * log(2) + 2 * log(beta)}),
-                   log_sum_exp(std::array<double, 4>{2 * tau1 + 2 * log(2) + 2 * log(beta),
-                                                     2 * tau2 + log(2) + 2 * log(beta),
-                                                     2 * tau1 + log(2) + log(beta),
-                                                     2 * tau2 + log(beta)}));
+      -2 * tau1t - 2 * tau2t - 6 * log(2) - log1p_2beta - log1p_beta +
+      log_diff_exp(log_sum_exp(std::array<double, 4>{2 * tau1t + 2 * tau2t + log(2) + 2 * log_beta,
+                                                     2 * tau1t + 2 * tau2t + log(3) + log_beta,
+                                                     2 * tau1t + 2 * tau2t,
+                                                     tau1t + 2 * log(2) + 2 * log_beta}),
+                   log_sum_exp(std::array<double, 4>{2 * tau1t + 2 * log(2) + 2 * log_beta,
+                                                     2 * tau2t + log(2) + 2 * log_beta,
+                                                     2 * tau1t + log(2) + log_beta,
+                                                     2 * tau2t + log_beta}));
 
   return {log_s_xxx, log_s_xxy, log_s_xyx, log_s_xyz};
 }
@@ -269,8 +268,6 @@ inline std::array<double, 3> compute_jc69_triplet_weights(const TuplePatterns& s
     Eigen::VectorXd x(2);
     x << best_tau1_init, best_tau2_init;
 
-    std::cout << best_tau1_init << " " << best_tau2_init << std::endl;
-
     double fx = init_neg_ll;
     try {
       solver.minimize(objective, x, fx, lb, ub);
@@ -295,9 +292,6 @@ inline std::array<double, 3> compute_jc69_triplet_weights(const TuplePatterns& s
 
     weights[i] = -fx;
   }
-
-  std::cout << tau1[0] << " " << tau2[0] << " " << tau1[1] << " " << tau2[1] << " " << tau1[2]
-            << " " << tau2[2] << std::endl;
 
   return weights;
 }

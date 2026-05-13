@@ -9,6 +9,8 @@
 
 #include "gen_tree.hpp"  // WeightedTriplet (brings in Eigen3 transitively)
 #include "sequence.hpp"
+#include "species_tree_jc69.hpp"
+#include "species_tree_k2p.hpp"
 #include "triplet_weights_gtr.hpp"
 #include "triplet_weights_jc69.hpp"
 #include "warn.hpp"
@@ -294,12 +296,8 @@ void for_each_ktuple_pattern(const GeneAlignment& gene, size_t k, Visitor&& visi
  */
 inline TuplePatterns site_patterns_for_ktaxa(const GeneAlignment& gene,
                                              std::vector<std::string> taxa) {
-  std::sort(taxa.begin(), taxa.end());
   if (taxa.size() < 1)
     throw std::invalid_argument("site_patterns_for_ktaxa: need at least 1 taxon");
-  for (size_t t = 0; t + 1 < taxa.size(); ++t)
-    if (taxa[t] == taxa[t + 1])
-      throw std::invalid_argument("site_patterns_for_ktaxa: duplicate taxon names");
 
   const size_t k = taxa.size();
 
@@ -413,12 +411,8 @@ inline TuplePatterns site_patterns_for_ktaxa(const GeneAlignment& gene,
  */
 inline TuplePatterns aggregate_site_patterns(const MultiGeneAlignment& alignment,
                                              std::vector<std::string> taxa) {
-  std::sort(taxa.begin(), taxa.end());
   if (taxa.size() < 1)
     throw std::invalid_argument("aggregate_site_patterns: need at least 1 taxon");
-  for (size_t t = 0; t + 1 < taxa.size(); ++t)
-    if (taxa[t] == taxa[t + 1])
-      throw std::invalid_argument("aggregate_site_patterns: duplicate taxon names");
 
   const size_t k = taxa.size();
 
@@ -649,22 +643,6 @@ inline TuplePatterns site_pattern(const GeneAlignment& gene, std::vector<std::st
 // (These depend on site_patterns_for_ktaxa / aggregate_site_patterns above,
 //  so they live here rather than in triplet_weights.hpp.)
 
-// Permute weights from sorted-taxa order back to caller-supplied order.
-// sorted_weights[i] has outgroup sorted_taxa[2-i].
-inline std::array<double, 3> permute_triplet_weights(const std::array<double, 3>& sorted_weights,
-                                                     const std::vector<std::string>& sorted_taxa,
-                                                     const std::string& taxon_a,
-                                                     const std::string& taxon_b,
-                                                     const std::string& taxon_c) {
-  // Find each caller taxon's position in sorted order.
-  // sorted_taxa has exactly 3 elements; each taxon matches exactly one.
-  size_t pos_a = (taxon_a == sorted_taxa[0]) ? 0 : (taxon_a == sorted_taxa[1]) ? 1 : 2;
-  size_t pos_b = (taxon_b == sorted_taxa[0]) ? 0 : (taxon_b == sorted_taxa[1]) ? 1 : 2;
-  size_t pos_c = (taxon_c == sorted_taxa[0]) ? 0 : (taxon_c == sorted_taxa[1]) ? 1 : 2;
-  // Outgroup at sorted position j -> sorted_weights[2-j]
-  return {sorted_weights[2 - pos_c], sorted_weights[2 - pos_b], sorted_weights[2 - pos_a]};
-}
-
 /**
  * Compute JC69 triplet weights from a multi-gene alignment.
  *
@@ -679,14 +657,8 @@ inline std::array<double, 3> compute_jc69_triplet_weights(const MultiGeneAlignme
                                                           const std::string& taxon_c,
                                                           double theta) {
   auto site_patterns = aggregate_site_patterns(alignment, {taxon_a, taxon_b, taxon_c});
-  auto sorted_log_weights = compute_jc69_triplet_weights(site_patterns, theta);
-  // const double scale = log_sum_exp(sorted_log_weights);
-  // for (double& w : sorted_log_weights)
-  //   w -= scale;
-  std::array<double, 3> sorted_weights = {std::exp(sorted_log_weights[0]),
-                                          std::exp(sorted_log_weights[1]),
-                                          std::exp(sorted_log_weights[2])};
-  return permute_triplet_weights(sorted_weights, site_patterns.taxa, taxon_a, taxon_b, taxon_c);
+  auto log_weights = compute_jc69_triplet_weights(site_patterns, theta);
+  return {std::exp(log_weights[0]), std::exp(log_weights[1]), std::exp(log_weights[2])};
 }
 
 /**
@@ -703,18 +675,10 @@ inline std::array<double, 3> compute_jc69_triplet_weights(const GeneAlignment& g
                                                           const std::string& taxon_c,
                                                           double theta) {
   auto site_patterns = site_patterns_for_ktaxa(gene, {taxon_a, taxon_b, taxon_c});
-  auto sorted_log_weights = compute_jc69_triplet_weights(site_patterns, theta);
-  const double scale = log_sum_exp(sorted_log_weights);
-  if (scale == -std::numeric_limits<double>::infinity()) {
-    // All triplets are rejected.
-    return {0.0, 0.0, 0.0};
-  }
-  // for (double& w : sorted_log_weights)
-  //   w -= scale;
-  std::array<double, 3> sorted_weights = {std::exp(sorted_log_weights[0]),
-                                          std::exp(sorted_log_weights[1]),
-                                          std::exp(sorted_log_weights[2])};
-  return permute_triplet_weights(sorted_weights, site_patterns.taxa, taxon_a, taxon_b, taxon_c);
+  auto log_weights = compute_jc69_triplet_weights(site_patterns, theta);
+  const double scale = log_sum_exp(log_weights);
+  if (scale == -std::numeric_limits<double>::infinity()) return {0.0, 0.0, 0.0};
+  return {std::exp(log_weights[0]), std::exp(log_weights[1]), std::exp(log_weights[2])};
 }
 
 /**
@@ -732,8 +696,7 @@ inline std::array<double, 3> compute_gtr_triplet_weights(const MultiGeneAlignmen
                                                          double theta,
                                                          double mu = 1.0) {
   auto site_patterns = aggregate_site_patterns(alignment, {taxon_a, taxon_b, taxon_c});
-  auto sorted_weights = compute_gtr_triplet_weights(site_patterns, theta, mu);
-  return permute_triplet_weights(sorted_weights, site_patterns.taxa, taxon_a, taxon_b, taxon_c);
+  return compute_gtr_triplet_weights(site_patterns, theta, mu);
 }
 
 /**
@@ -751,8 +714,94 @@ inline std::array<double, 3> compute_gtr_triplet_weights(const GeneAlignment& ge
                                                          double theta,
                                                          double mu = 1.0) {
   auto site_patterns = site_patterns_for_ktaxa(gene, {taxon_a, taxon_b, taxon_c});
-  auto sorted_weights = compute_gtr_triplet_weights(site_patterns, theta, mu);
-  return permute_triplet_weights(sorted_weights, site_patterns.taxa, taxon_a, taxon_b, taxon_c);
+  return compute_gtr_triplet_weights(site_patterns, theta, mu);
+}
+
+/**
+ * Compute JC69 species tree triplet weights from a multi-gene alignment.
+ *
+ * Results are in caller-supplied order:
+ *   result[0] -- (taxon_a, taxon_b) | taxon_c
+ *   result[1] -- (taxon_a, taxon_c) | taxon_b
+ *   result[2] -- (taxon_b, taxon_c) | taxon_a
+ */
+inline std::array<double, 3> compute_jc69_species_triplet_weights(
+    const MultiGeneAlignment& alignment,
+    const std::string& taxon_a,
+    const std::string& taxon_b,
+    const std::string& taxon_c,
+    double theta,
+    double mu = 4.0 / 3.0) {
+  auto site_patterns = aggregate_site_patterns(alignment, {taxon_a, taxon_b, taxon_c});
+  auto log_weights = compute_jc69_species_triplet_weights(site_patterns, theta, mu);
+  const double scale = log_sum_exp(log_weights);
+  if (scale == -std::numeric_limits<double>::infinity()) return {0.0, 0.0, 0.0};
+  return {std::exp(log_weights[0]), std::exp(log_weights[1]), std::exp(log_weights[2])};
+}
+
+/**
+ * Compute JC69 species tree triplet weights from a single gene.
+ *
+ * Results are in caller-supplied order:
+ *   result[0] -- (taxon_a, taxon_b) | taxon_c
+ *   result[1] -- (taxon_a, taxon_c) | taxon_b
+ *   result[2] -- (taxon_b, taxon_c) | taxon_a
+ */
+inline std::array<double, 3> compute_jc69_species_triplet_weights(const GeneAlignment& gene,
+                                                                  const std::string& taxon_a,
+                                                                  const std::string& taxon_b,
+                                                                  const std::string& taxon_c,
+                                                                  double theta,
+                                                                  double mu = 4.0 / 3.0) {
+  auto site_patterns = site_patterns_for_ktaxa(gene, {taxon_a, taxon_b, taxon_c});
+  auto log_weights = compute_jc69_species_triplet_weights(site_patterns, theta, mu);
+  const double scale = log_sum_exp(log_weights);
+  if (scale == -std::numeric_limits<double>::infinity()) return {0.0, 0.0, 0.0};
+  return {std::exp(log_weights[0]), std::exp(log_weights[1]), std::exp(log_weights[2])};
+}
+
+/**
+ * Compute K2P species tree triplet weights from a multi-gene alignment.
+ *
+ * Results are in caller-supplied order:
+ *   result[0] -- (taxon_a, taxon_b) | taxon_c
+ *   result[1] -- (taxon_a, taxon_c) | taxon_b
+ *   result[2] -- (taxon_b, taxon_c) | taxon_a
+ */
+inline std::array<double, 3> compute_k2p_species_triplet_weights(
+    const MultiGeneAlignment& alignment,
+    const std::string& taxon_a,
+    const std::string& taxon_b,
+    const std::string& taxon_c,
+    double theta,
+    double mu = 4.0 / 3.0) {
+  auto site_patterns = aggregate_site_patterns(alignment, {taxon_a, taxon_b, taxon_c});
+  auto log_weights = compute_k2p_species_triplet_weights(site_patterns, theta, mu);
+  const double scale = log_sum_exp(log_weights);
+  if (scale == -std::numeric_limits<double>::infinity()) return {0.0, 0.0, 0.0};
+  return {std::exp(log_weights[0]), std::exp(log_weights[1]), std::exp(log_weights[2])};
+}
+
+/**
+ * Compute K2P species tree triplet weights from a single gene.
+ *
+ * Results are in caller-supplied order:
+ *   result[0] -- (taxon_a, taxon_b) | taxon_c
+ *   result[1] -- (taxon_a, taxon_c) | taxon_b
+ *   result[2] -- (taxon_b, taxon_c) | taxon_a
+ */
+inline std::array<double, 3> compute_k2p_species_triplet_weights(
+    const GeneAlignment& gene,
+    const std::string& taxon_a,
+    const std::string& taxon_b,
+    const std::string& taxon_c,
+    double theta,
+    double mu = 4.0 / 3.0) {
+  auto site_patterns = site_patterns_for_ktaxa(gene, {taxon_a, taxon_b, taxon_c});
+  auto log_weights = compute_k2p_species_triplet_weights(site_patterns, theta, mu);
+  const double scale = log_sum_exp(log_weights);
+  if (scale == -std::numeric_limits<double>::infinity()) return {0.0, 0.0, 0.0};
+  return {std::exp(log_weights[0]), std::exp(log_weights[1]), std::exp(log_weights[2])};
 }
 
 /**
