@@ -42,7 +42,8 @@ inline std::vector<WeightedTree> parse_weighted_trees_from_stream(std::istream& 
   std::vector<WeightedTree> trees;
   std::string line;
   int line_num = 0;
-  bool weight_warning_already_displayed = false;
+  int weight_warning_display_count = 0;
+  int newick_warning_display_count = 0;
 
   while (std::getline(stream, line)) {
     line_num++;
@@ -89,10 +90,7 @@ inline std::vector<WeightedTree> parse_weighted_trees_from_stream(std::istream& 
                                  source + ": '" + weight_str + "'");
       }
     } else {
-      if (!weight_warning_already_displayed) {
-        PHYLOTRIPLET_WARN("Warning: no weight found at line " + std::to_string(line_num) + " of " +
-                          source + ", defaulting to 1.0.");
-      }
+      weight_warning_display_count++;
     }
 
     std::string newick = line.substr(0, space_separator);
@@ -107,8 +105,7 @@ inline std::vector<WeightedTree> parse_weighted_trees_from_stream(std::istream& 
     }
     if (newick.back() != ';') {
       newick += ';';
-      PHYLOTRIPLET_WARN("Warning: Newick string missing semicolon at line " +
-                        std::to_string(line_num) + " of " + source + ".");
+      newick_warning_display_count++;
     }
 
     try {
@@ -117,6 +114,19 @@ inline std::vector<WeightedTree> parse_weighted_trees_from_stream(std::istream& 
       throw std::runtime_error("Error on line " + std::to_string(line_num) + " of " + source +
                                ": " + e.what());
     }
+  }
+
+  if (trees.empty()) {
+    throw std::runtime_error("No trees found in " + source);
+  }
+
+  if (weight_warning_display_count > 1) {
+    PHYLOTRIPLET_WARN("Warning: " + std::to_string(weight_warning_display_count) + " lines in " +
+                      source + " had no weight, defaulting to 1.0.");
+  }
+  if (newick_warning_display_count > 1) {
+    PHYLOTRIPLET_WARN("Warning: " + std::to_string(newick_warning_display_count) + " lines in " +
+                      source + " had missing semicolons.");
   }
 
   return trees;

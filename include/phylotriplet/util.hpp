@@ -6,7 +6,7 @@
 #include <stdexcept>
 
 template <typename T, size_t N>
-inline T log_sum_exp(std::array<T, N> values) {
+constexpr inline T log_sum_exp(std::array<T, N> values) {
   std::sort(values.begin(), values.end(), std::less<T>());
   // skip -infinity values to avoid NaN from (-inf) - (-inf)
   size_t start = 0;
@@ -23,7 +23,7 @@ inline T log_sum_exp(std::array<T, N> values) {
   return accum;
 }
 
-inline double log_diff_exp(double log_a, double log_b) {
+constexpr inline double log_diff_exp(double log_a, double log_b) {
   if (log_a < log_b) {
     throw std::invalid_argument("log_diff_exp: log_a must be >= log_b, got log_a=" +
                                 std::to_string(log_a) + " log_b=" + std::to_string(log_b));

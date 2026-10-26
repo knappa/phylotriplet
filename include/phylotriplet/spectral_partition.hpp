@@ -2,7 +2,6 @@
 
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
-#include <Eigen/SVD>
 #include <cmath>
 #include <queue>
 #include <stdexcept>
@@ -19,8 +18,10 @@ namespace phylotriplet {
  * returns one entry per connected component (there may be more than two).
  *
  * @return  Vector of components; each component is a vector of taxa names.
- *          Always contains at least two entries (the caller should treat a
- *          single-entry result as an error).
+ *          Always contains at least two non-empty entries (the caller should
+ *          treat a single-entry result as an error).  The bipartition is
+ *          non-degenerate because the Fiedler vector is orthogonal to the
+ *          constant vector and so carries both signs.
  */
 inline std::vector<std::vector<std::string>> spectral_laplacian_partition(
     const Eigen::MatrixXd& adj_matrix,
@@ -94,22 +95,10 @@ inline std::vector<std::vector<std::string>> spectral_laplacian_partition(
       special_idx.push_back(i);
   }
 
-  Eigen::VectorXd component_vec(n);
-  if (special_idx.size() > 1) {
-    // build subspace matrix M = transpose(evecs[:, special_idx]) -> size k x n
-    const int k = static_cast<int>(special_idx.size());
-    Eigen::MatrixXd M(k, n);
-    for (int r = 0; r < k; ++r) {
-      M.row(r) = evecs.col(special_idx[r]).transpose();
-    }
-    // use SVD and take the right-singular-vector associated with smallest
-    // singular value
-    Eigen::JacobiSVD<Eigen::MatrixXd> svd(M, Eigen::ComputeFullV);
-    Eigen::MatrixXd V = svd.matrixV();  // V is n x n
-    component_vec = V.col(V.cols() - 1);
-  } else {
-    component_vec = evecs.col(second_idx);
-  }
+  // Any vector in the Fiedler eigenspace induces a valid bipartition.  When
+  // the eigenvalue is degenerate the choice among them is arbitrary, so take
+  // the first basis vector of that eigenspace.
+  Eigen::VectorXd component_vec = evecs.col(special_idx.front());
 
   // partition by sign, zeros go to smaller side, ties to negative side
   int pos_count = 0;

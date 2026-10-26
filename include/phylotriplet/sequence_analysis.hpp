@@ -677,7 +677,8 @@ inline std::array<double, 3> compute_jc69_triplet_weights(const GeneAlignment& g
   auto site_patterns = site_patterns_for_ktaxa(gene, {taxon_a, taxon_b, taxon_c});
   auto log_weights = compute_jc69_triplet_weights(site_patterns, theta);
   const double scale = log_sum_exp(log_weights);
-  if (scale == -std::numeric_limits<double>::infinity()) return {0.0, 0.0, 0.0};
+  if (scale == -std::numeric_limits<double>::infinity())
+    return {0.0, 0.0, 0.0};
   return {std::exp(log_weights[0]), std::exp(log_weights[1]), std::exp(log_weights[2])};
 }
 
@@ -735,7 +736,8 @@ inline std::array<double, 3> compute_jc69_species_triplet_weights(
   auto site_patterns = aggregate_site_patterns(alignment, {taxon_a, taxon_b, taxon_c});
   auto log_weights = compute_jc69_species_triplet_weights(site_patterns, theta, mu);
   const double scale = log_sum_exp(log_weights);
-  if (scale == -std::numeric_limits<double>::infinity()) return {0.0, 0.0, 0.0};
+  if (scale == -std::numeric_limits<double>::infinity())
+    return {0.0, 0.0, 0.0};
   return {std::exp(log_weights[0]), std::exp(log_weights[1]), std::exp(log_weights[2])};
 }
 
@@ -756,7 +758,8 @@ inline std::array<double, 3> compute_jc69_species_triplet_weights(const GeneAlig
   auto site_patterns = site_patterns_for_ktaxa(gene, {taxon_a, taxon_b, taxon_c});
   auto log_weights = compute_jc69_species_triplet_weights(site_patterns, theta, mu);
   const double scale = log_sum_exp(log_weights);
-  if (scale == -std::numeric_limits<double>::infinity()) return {0.0, 0.0, 0.0};
+  if (scale == -std::numeric_limits<double>::infinity())
+    return {0.0, 0.0, 0.0};
   return {std::exp(log_weights[0]), std::exp(log_weights[1]), std::exp(log_weights[2])};
 }
 
@@ -778,7 +781,8 @@ inline std::array<double, 3> compute_k2p_species_triplet_weights(
   auto site_patterns = aggregate_site_patterns(alignment, {taxon_a, taxon_b, taxon_c});
   auto log_weights = compute_k2p_species_triplet_weights(site_patterns, theta, mu);
   const double scale = log_sum_exp(log_weights);
-  if (scale == -std::numeric_limits<double>::infinity()) return {0.0, 0.0, 0.0};
+  if (scale == -std::numeric_limits<double>::infinity())
+    return {0.0, 0.0, 0.0};
   return {std::exp(log_weights[0]), std::exp(log_weights[1]), std::exp(log_weights[2])};
 }
 
@@ -790,17 +794,17 @@ inline std::array<double, 3> compute_k2p_species_triplet_weights(
  *   result[1] -- (taxon_a, taxon_c) | taxon_b
  *   result[2] -- (taxon_b, taxon_c) | taxon_a
  */
-inline std::array<double, 3> compute_k2p_species_triplet_weights(
-    const GeneAlignment& gene,
-    const std::string& taxon_a,
-    const std::string& taxon_b,
-    const std::string& taxon_c,
-    double theta,
-    double mu = 4.0 / 3.0) {
+inline std::array<double, 3> compute_k2p_species_triplet_weights(const GeneAlignment& gene,
+                                                                 const std::string& taxon_a,
+                                                                 const std::string& taxon_b,
+                                                                 const std::string& taxon_c,
+                                                                 double theta,
+                                                                 double mu = 4.0 / 3.0) {
   auto site_patterns = site_patterns_for_ktaxa(gene, {taxon_a, taxon_b, taxon_c});
   auto log_weights = compute_k2p_species_triplet_weights(site_patterns, theta, mu);
   const double scale = log_sum_exp(log_weights);
-  if (scale == -std::numeric_limits<double>::infinity()) return {0.0, 0.0, 0.0};
+  if (scale == -std::numeric_limits<double>::infinity())
+    return {0.0, 0.0, 0.0};
   return {std::exp(log_weights[0]), std::exp(log_weights[1]), std::exp(log_weights[2])};
 }
 

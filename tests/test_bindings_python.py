@@ -345,3 +345,63 @@ class TestSiteCompression:
         assert sum(pats[0].site_pattern) == pytest.approx(
             pats[0].n_counted
         )
+
+class TestGenTreeTaxonPreservation:
+    """Every taxon in the input triplets must appear as a leaf of the result."""
+
+    def _leaf_names(self, newick):
+        import re
+        return re.findall(r'[A-Za-z0-9_.]+', newick)
+
+    def test_unconstrained_taxon_is_kept(self):
+        # Taxon d sits in a partition component alongside a,b,c but every
+        # triplet mentioning d straddles the component boundary, so no triplet
+        # over the component constrains it.  It must still be placed.
+        content = "\n".join([
+            "((a,b),c); 1.0",
+            "((a,b),d); 1.0",
+            "((a,c),e); 1.0",
+            "((d,e),a); 1.0",
+            "((d,e),b); 1.0",
+            "((d,e),c); 1.0",
+        ]) + "\n"
+        newick = pt.estimate_tree_from_string(content)
+        leaves = self._leaf_names(newick)
+        assert sorted(leaves) == ["a", "b", "c", "d", "e"]
+        assert len(leaves) == len(set(leaves))
+
+    def test_contradictory_triplet_cycle_terminates(self):
+        # Four triplets forming a cherry cycle on four taxa give the Laplacian
+        # a degenerate Fiedler eigenvalue.  The call must return a tree over
+        # all four taxa rather than recursing forever.
+        content = "\n".join([
+            "((d,b),c); 1.0",
+            "((c,a),b); 1.0",
+            "((d,c),a); 1.0",
+            "((b,a),d); 1.0",
+        ]) + "\n"
+        newick = pt.estimate_tree_from_string(content)
+        leaves = self._leaf_names(newick)
+        assert sorted(leaves) == ["a", "b", "c", "d"]
+
+    def test_random_triplet_sets_preserve_taxa(self):
+        import itertools
+        import random
+
+        random.seed(1234)
+        names = [chr(ord("a") + i) for i in range(7)]
+        all_triplets = list(itertools.combinations(names, 3))
+
+        for _ in range(300):
+            chosen = random.sample(all_triplets, random.randint(1, 8))
+            lines = []
+            for triplet in chosen:
+                shuffled = random.sample(list(triplet), 3)
+                lines.append("((%s,%s),%s); 1.0" % tuple(shuffled))
+            content = "\n".join(lines) + "\n"
+            expected = sorted({name for t in chosen for name in t})
+
+            newick = pt.estimate_tree_from_string(content)
+            leaves = self._leaf_names(newick)
+            assert sorted(leaves) == expected, (lines, newick)
+            assert len(leaves) == len(set(leaves)), (lines, newick)
