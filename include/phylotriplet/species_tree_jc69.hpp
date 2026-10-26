@@ -113,7 +113,7 @@ inline double jc69_unrooted_neg_loglik(const double e_A,
            g.n_xyz * std::log(p.p_xyz + eps));
 }
 
-inline constexpr double logp_xxx(const double mu, const double theta) {
+inline double logp_xxx(const double mu, const double theta) {
   const double x = mu * theta;
   const double log_x = std::log(mu) + std::log(theta);
   return -5 * log(2) +
@@ -128,7 +128,7 @@ inline constexpr double logp_xxx(const double mu, const double theta) {
          log1p(3 * x + 3) - 2 * log1p(3 * x + 1) - log1p(x + 1) - 3 * log1p(x);
 }
 
-inline constexpr double logp_xxy(const double mu, const double theta) {
+inline double logp_xxy(const double mu, const double theta) {
   const double x = mu * theta;
   const double log_x = std::log(mu) + std::log(theta);
   return std::log(3.0 / 32.0) +
@@ -142,11 +142,15 @@ inline constexpr double logp_xxy(const double mu, const double theta) {
          std::log(x);
 }
 
-inline constexpr double logp_xyx(const double mu, const double theta) {
+inline double logp_xyx(const double mu, const double theta) {
   const double x = mu * theta;
   const double log_x = std::log(mu) + std::log(theta);
+  // TODO(reinspect): the seven terms below span degrees 6..0 in log_x and the
+  // array size matches that count, so the sum has no zero-initialized slot
+  // silently adding exp(0) = 1.  Check the derivation to confirm that seven is
+  // the intended number of terms and none is missing.
   return std::log(3.0 / 32.0) +
-         log_sum_exp(std::array<double, 8>{6 * log_x + std::log(54),
+         log_sum_exp(std::array<double, 7>{6 * log_x + std::log(54),
                                            5 * log_x + std::log(414),
                                            4 * log_x + std::log(1299),
                                            3 * log_x + std::log(2207),
@@ -157,11 +161,11 @@ inline constexpr double logp_xyx(const double mu, const double theta) {
          std::log(x);
 }
 
-inline constexpr double logp_yxx(const double mu, const double theta) {
+inline double logp_yxx(const double mu, const double theta) {
   return logp_xyx(mu, theta);
 }
 
-inline constexpr double logp_xyz(const double mu, const double theta) {
+inline double logp_xyz(const double mu, const double theta) {
   const double x = mu * theta;
   const double log_x = std::log(mu) + std::log(theta);
   return std::log(3.0 / 16.0) +
