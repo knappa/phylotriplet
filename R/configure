@@ -56,20 +56,22 @@ OMP_LIBS=""
 case "$(uname)" in
   Darwin)
     # Apple Clang needs libomp (brew install libomp); it does not ship with
-    # a working -fopenmp out of the box.
-    OMP_PREFIX=""
+    # a working -fopenmp out of the box.  `brew --prefix libomp` reports the
+    # path the formula would occupy whether or not it is installed, so each
+    # candidate counts only once omp.h is actually present under it.
+    BREW_OMP_PREFIX=""
     if command -v brew >/dev/null 2>&1; then
-      OMP_PREFIX="$(brew --prefix libomp 2>/dev/null)"
+      BREW_OMP_PREFIX="$(brew --prefix libomp 2>/dev/null)"
     fi
-    # Fallback: common Homebrew prefixes without running brew
-    if [ -z "${OMP_PREFIX}" ]; then
-      for d in /opt/homebrew/opt/libomp /usr/local/opt/libomp; do
-        if [ -d "${d}/include" ]; then
-          OMP_PREFIX="${d}"
-          break
-        fi
-      done
-    fi
+
+    OMP_PREFIX=""
+    for d in "${BREW_OMP_PREFIX}" /opt/homebrew/opt/libomp /usr/local/opt/libomp; do
+      if [ -n "${d}" ] && [ -f "${d}/include/omp.h" ]; then
+        OMP_PREFIX="${d}"
+        break
+      fi
+    done
+
     if [ -n "${OMP_PREFIX}" ]; then
       OMP_CFLAGS="-Xpreprocessor -fopenmp -I${OMP_PREFIX}/include"
       OMP_LIBS="-L${OMP_PREFIX}/lib -lomp"
